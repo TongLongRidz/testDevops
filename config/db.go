@@ -3,10 +3,12 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
+	// "strings"
+	"log"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger" // เพิ่มอันนี้
 )
 
 func ConnectDB() *gorm.DB {
@@ -18,7 +20,12 @@ func ConnectDB() *gorm.DB {
 		os.Getenv("DB_NAME"),
 		os.Getenv("DB_PORT"),
 	)
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	
+	// เพิ่ม Logger: Info เพื่อดู SQL ทุกคำสั่งที่ส่งไป DB
+    db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+        Logger: logger.Default.LogMode(logger.Info),
+    })
+
 	if err != nil {
 		log.Fatal("Cannot connect to DB:", err)
 	}
