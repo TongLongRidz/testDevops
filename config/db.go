@@ -24,6 +24,7 @@ func ConnectDB() *gorm.DB {
 	// เพิ่ม Logger: Info เพื่อดู SQL ทุกคำสั่งที่ส่งไป DB
     db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
         Logger: logger.Default.LogMode(logger.Info),
+        DisableForeignKeyConstraintWhenMigrating: true, 
     })
 
 	if err != nil {

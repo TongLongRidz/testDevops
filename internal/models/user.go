@@ -10,8 +10,8 @@ type User struct {
     Lastname       string    `gorm:"type:varchar(100);column:lastname" json:"lastname"` // Done
     Email          string    `gorm:"uniqueIndex;not null;column:email" json:"email"` // Done
     HashedPassword string    `gorm:"type:string;column:hashed_password" json:"-"` // ใส่ "-" เพื่อไม่ให้ส่ง password ออกไปทาง JSON
-    Address        string    `gorm:"type:text;column:address" json:"address"`
-    PhoneNumber    string    `gorm:"type:varchar(20);column:phone_number" json:"phone_number"`
+    // Address        string    `gorm:"type:text;column:address" json:"address"`
+    // PhoneNumber    string    `gorm:"type:varchar(20);column:phone_number" json:"phone_number"`
     ImagePath      string    `gorm:"type:text;column:image_path" json:"image_path"` // แก้จาก Image
     Provider       string    `gorm:"type:varchar(50);default:'manual';column:provider" json:"provider"` // Done
 	RoleID         int       `gorm:"column:role_id" json:"role_id"`

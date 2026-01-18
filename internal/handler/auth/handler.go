@@ -6,11 +6,16 @@ import (
 )
 
 type AuthHandler struct {
-	AuthService usecase.AuthService
+	AuthService    usecase.AuthService
+	StudentService usecase.StudentService
 }
 
 func NewAuthHandler(u usecase.AuthService) *AuthHandler {
 	return &AuthHandler{AuthService: u}
+}
+
+func NewAuthHandlerWithStudent(u usecase.AuthService, s usecase.StudentService) *AuthHandler {
+	return &AuthHandler{AuthService: u, StudentService: s}
 }
 
 func (h *AuthHandler) GoogleLogin(c *fiber.Ctx) error {

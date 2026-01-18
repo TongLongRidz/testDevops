@@ -2,7 +2,7 @@ package repository
 
 import (
 	"backend/internal/models"
-
+    "context"
 	"gorm.io/gorm"
     // "golang.org/x/crypto/bcrypt"
     // "time"
@@ -14,6 +14,7 @@ type UserRepository interface {
 	GetUserByID(id uint) (*models.User, error)
     GetUserList() ([]models.User, error)
 	GetUserByEmail(email string) (*models.User, error)
+    UpdateUserFields(ctx context.Context, userID uint, updates map[string]interface{}) (*models.User, error)
 	// GetUserListSortedByCampus() ([]models.User, error)
 	// GetUserListSortedByProvider() ([]models.User, error)
 	// SearchUsers(keyword string, sortBy string) ([]models.User, error)
@@ -60,6 +61,16 @@ func (r *userRepository) GetUserList() ([]models.User, error) {
         return nil, err
     }
     return users, nil
+}
+
+func (r *userRepository) UpdateUserFields(ctx context.Context, userID uint, updates map[string]interface{}) (*models.User, error) {
+    if err := r.db.WithContext(ctx).
+        Model(&models.User{}).
+        Where("user_id = ?", userID).
+        Updates(updates).Error; err != nil {
+        return nil, err
+    }
+    return r.GetUserByID(userID)
 }
 
 // func (r *userRepository) GetUserListSortedByCampus() ([]models.User, error) {

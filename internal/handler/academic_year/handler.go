@@ -1,131 +1,283 @@
-package academic_year
+package academicyear
 
 import (
-    "backend/internal/models"
-    "backend/internal/usecase"
-    "errors"
+	academicYearDTO "backend/internal/dto/academic_year_dto"
+	"backend/internal/usecase"
+	"strconv"
 
-    "github.com/gofiber/fiber/v2"
-    "gorm.io/gorm"
+	"github.com/gofiber/fiber/v2"
 )
 
 type AcademicYearHandler struct {
-    svc *usecase.AcademicYearService
+	service usecase.AcademicYearService
 }
 
-func NewAcademicYearHandler(svc *usecase.AcademicYearService) *AcademicYearHandler {
-    return &AcademicYearHandler{svc: svc}
+func NewAcademicYearHandler(service usecase.AcademicYearService) *AcademicYearHandler {
+	return &AcademicYearHandler{service: service}
 }
 
-func (h *AcademicYearHandler) Update(c *fiber.Ctx) error {
-    id, err := c.ParamsInt("id")
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
+// CreateAcademicYear สร้าง academic year ใหม่
+func (h *AcademicYearHandler) CreateAcademicYear(c *fiber.Ctx) error {
+	req := new(academicYearDTO.CreateAcademicYear)
+
+	if err := c.BodyParser(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
 	}
 
-    var ay models.AcademicYear
-    if err := c.BodyParser(&ay); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
-    }
-    ay.AcademicYearID = uint(id)
-
-    out, err := h.svc.Update(c.UserContext(), &ay)
-    if err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {
-            return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
-        }
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-    }
-    return c.JSON(out)
-}
-
-func (h *AcademicYearHandler) Delete(c *fiber.Ctx) error {
-    id, err := c.ParamsInt("id")
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
-	}
-
-    if err := h.svc.Delete(c.UserContext(), uint(id)); err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {
-            return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
-        }
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-    }
-    return c.SendStatus(fiber.StatusNoContent)
-}
-
-func (h *AcademicYearHandler) Create(c *fiber.Ctx) error {
-	var ay models.AcademicYear
-	if err := c.BodyParser(&ay); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
-	}
-
-	// คุณอาจจะเพิ่ม validation เล็กๆ น้อยๆ ตรงนี้เหมือนตอนเช็ค Email/Password
-	if ay.Year == 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "year is required"})
-	}
-
-	out, err := h.svc.Create(c.UserContext(), &ay)
+	academicYear, err := h.service.CreateAcademicYear(c.Context(), req)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "created successfully",
-		"data":    out,
-	})
-}
-
-func (h *AcademicYearHandler) GetList(c *fiber.Ctx) error {
-	out, err := h.svc.GetList(c.UserContext())
-	if err != nil {
-		// ถ้าเกิด Error ในระดับ Database/Service
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	// ถ้าไม่มีข้อมูลใน list เลย (เป็น empty slice)
-	if len(out) == 0 {
-		return c.JSON(fiber.Map{
-			"data": []models.AcademicYear{}, // ส่ง array เปล่ากลับไปเพื่อให้ Front-end loop ได้ไม่พัง
+	response := &academicYearDTO.AcademicYearResponse{
+		AcademicYearID: academicYear.AcademicYearID,
+		Year:           academicYear.Year,
+		Semester:       academicYear.Semester,
+		StartDate:      academicYear.StartDate,
+		EndDate:        academicYear.EndDate,
+		IsCurrent:      academicYear.IsCurrent,
+		IsOpenRegister: academicYear.IsOpenRegister,
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Academic year created successfully",
+		"data":    response,
+	})
+}
+
+// GetAllAcademicYears ดึงข้อมูล academic year ทั้งหมด
+func (h *AcademicYearHandler) GetAllAcademicYears(c *fiber.Ctx) error {
+	academicYears, err := h.service.GetAllAcademicYears(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	var responses []academicYearDTO.AcademicYearResponse
+	for _, ay := range academicYears {
+		responses = append(responses, academicYearDTO.AcademicYearResponse{
+			AcademicYearID: ay.AcademicYearID,
+			Year:           ay.Year,
+			Semester:       ay.Semester,
+			StartDate:      ay.StartDate,
+			EndDate:        ay.EndDate,
+			IsCurrent:      ay.IsCurrent,
+			IsOpenRegister: ay.IsOpenRegister,
 		})
 	}
 
 	return c.JSON(fiber.Map{
-		"data": out,
+		"message": "Academic years retrieved successfully",
+		"data":    responses,
 	})
 }
 
-func (h *AcademicYearHandler) GetLatest(c *fiber.Ctx) error {
-	out, err := h.svc.GetLatest(c.UserContext())
+// GetAcademicYearByID ดึงข้อมูล academic year ตามรหัส
+func (h *AcademicYearHandler) GetAcademicYearByID(c *fiber.Ctx) error {
+	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "no academic year records found"})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid academic year ID",
+		})
+	}
+
+	academicYear, err := h.service.GetAcademicYearByID(c.Context(), uint(id))
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Academic year not found",
+		})
+	}
+
+	response := &academicYearDTO.AcademicYearResponse{
+		AcademicYearID: academicYear.AcademicYearID,
+		Year:           academicYear.Year,
+		Semester:       academicYear.Semester,
+		StartDate:      academicYear.StartDate,
+		EndDate:        academicYear.EndDate,
+		IsCurrent:      academicYear.IsCurrent,
+		IsOpenRegister: academicYear.IsOpenRegister,
 	}
 
 	return c.JSON(fiber.Map{
-		"data": out,
+		"message": "Academic year retrieved successfully",
+		"data":    response,
 	})
 }
 
-func (h *AcademicYearHandler) GetByID(c *fiber.Ctx) error {
-	id, err := c.ParamsInt("id")
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
+// UpdateAcademicYear แก้ไข academic year
+func (h *AcademicYearHandler) UpdateAcademicYear(c *fiber.Ctx) error {
+	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid academic year ID",
+		})
 	}
 
-	out, err := h.svc.GetByID(c.UserContext(), uint(id))
+	req := new(academicYearDTO.UpdateAcademicYear)
+	if err := c.BodyParser(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	academicYear, err := h.service.UpdateAcademicYear(c.Context(), uint(id), req)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "academic year not found"})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	response := &academicYearDTO.AcademicYearResponse{
+		AcademicYearID: academicYear.AcademicYearID,
+		Year:           academicYear.Year,
+		Semester:       academicYear.Semester,
+		StartDate:      academicYear.StartDate,
+		EndDate:        academicYear.EndDate,
+		IsCurrent:      academicYear.IsCurrent,
+		IsOpenRegister: academicYear.IsOpenRegister,
 	}
 
 	return c.JSON(fiber.Map{
-		"data": out,
+		"message": "Academic year updated successfully",
+		"data":    response,
+	})
+}
+
+// DeleteAcademicYear ลบ academic year
+func (h *AcademicYearHandler) DeleteAcademicYear(c *fiber.Ctx) error {
+	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid academic year ID",
+		})
+	}
+
+	if err := h.service.DeleteAcademicYear(c.Context(), uint(id)); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Academic year deleted successfully",
+	})
+}
+
+// ToggleCurrent เปิด/ปิด isCurrent (มีได้แค่อันเดียว)
+func (h *AcademicYearHandler) ToggleCurrent(c *fiber.Ctx) error {
+	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid academic year ID",
+		})
+	}
+
+	academicYear, err := h.service.ToggleCurrent(c.Context(), uint(id))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	response := &academicYearDTO.AcademicYearResponse{
+		AcademicYearID: academicYear.AcademicYearID,
+		Year:           academicYear.Year,
+		Semester:       academicYear.Semester,
+		StartDate:      academicYear.StartDate,
+		EndDate:        academicYear.EndDate,
+		IsCurrent:      academicYear.IsCurrent,
+		IsOpenRegister: academicYear.IsOpenRegister,
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "isCurrent toggled successfully",
+		"data":    response,
+	})
+}
+
+// ToggleOpenRegister เปิด/ปิด isOpenRegister (มีได้แค่อันเดียว)
+func (h *AcademicYearHandler) ToggleOpenRegister(c *fiber.Ctx) error {
+	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid academic year ID",
+		})
+	}
+
+	academicYear, err := h.service.ToggleOpenRegister(c.Context(), uint(id))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	response := &academicYearDTO.AcademicYearResponse{
+		AcademicYearID: academicYear.AcademicYearID,
+		Year:           academicYear.Year,
+		Semester:       academicYear.Semester,
+		StartDate:      academicYear.StartDate,
+		EndDate:        academicYear.EndDate,
+		IsCurrent:      academicYear.IsCurrent,
+		IsOpenRegister: academicYear.IsOpenRegister,
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "isOpenRegister toggled successfully",
+		"data":    response,
+	})
+}
+
+// GetCurrentSemester ดึงข้อมูล academic year ที่เป็น current
+func (h *AcademicYearHandler) GetCurrentSemester(c *fiber.Ctx) error {
+	academicYear, err := h.service.GetCurrentSemester(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "No current academic year found",
+		})
+	}
+
+	response := &academicYearDTO.AcademicYearResponse{
+		AcademicYearID: academicYear.AcademicYearID,
+		Year:           academicYear.Year,
+		Semester:       academicYear.Semester,
+		StartDate:      academicYear.StartDate,
+		EndDate:        academicYear.EndDate,
+		IsCurrent:      academicYear.IsCurrent,
+		IsOpenRegister: academicYear.IsOpenRegister,
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Current academic year retrieved successfully",
+		"data":    response,
+	})
+}
+
+// GetLatestAbleRegister ดึงข้อมูล academic year ที่ current = true และ isOpenRegister = true
+func (h *AcademicYearHandler) GetLatestAbleRegister(c *fiber.Ctx) error {
+	academicYear, err := h.service.GetLatestAbleRegister(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "No academic year available for registration",
+		})
+	}
+
+	response := &academicYearDTO.AcademicYearResponse{
+		AcademicYearID: academicYear.AcademicYearID,
+		Year:           academicYear.Year,
+		Semester:       academicYear.Semester,
+		StartDate:      academicYear.StartDate,
+		EndDate:        academicYear.EndDate,
+		IsCurrent:      academicYear.IsCurrent,
+		IsOpenRegister: academicYear.IsOpenRegister,
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Available academic year for registration retrieved successfully",
+		"data":    response,
 	})
 }

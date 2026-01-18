@@ -1,4 +1,6 @@
-package dto
+package authdto
+
+import "time"
 
 // RegisterRequest ใช้สำหรับรับข้อมูลตอนสมัครสมาชิก (Manual Register)
 type RegisterRequest struct {
@@ -21,11 +23,48 @@ type LoginResponse struct {
 
 // UserResponse คือรายละเอียดของผู้ใช้ที่อนุญาตให้ส่งออกไปภายนอก (Safe Data)
 type UserResponse struct {
-	UserID       uint   `json:"userID"`
-	Email        string `json:"email"`
-	Firstname    string `json:"firstname"`
-	Lastname     string `json:"lastname"`
-	ImagePath    string `json:"imagePath"`
-	RoleID       int    `json:"roleID"`
-	IsFirstLogin bool   `json:"isFirstLogin"` // แจ้ง Frontend ว่าต้องไปหน้าตั้งค่าโปรไฟล์หรือไม่
+    UserID       uint      `json:"user_id"`
+    Firstname    string    `json:"firstname"`
+    Lastname     string    `json:"lastname"`
+    Email        string    `json:"email"`
+    ImagePath    string    `json:"image_path"`
+    Provider     string    `json:"provider"`
+    RoleID       int       `json:"role_id"`
+    CampusID     int       `json:"campus_id"`
+    IsFirstLogin bool      `json:"is_first_login"`
+    CreatedAt    time.Time `json:"created_at"`
+    LatestUpdate time.Time `json:"latest_update"`
+}
+
+// MeResponse คือข้อมูล /me endpoint
+type MeResponse struct {
+    UserID        uint                `json:"user_id"`
+    Firstname     string              `json:"firstname"`
+    Lastname      string              `json:"lastname"`
+    Email         string              `json:"email"`
+    ImagePath     string              `json:"image_path"`
+    Provider      string              `json:"provider"`
+    RoleID        int                 `json:"role_id"`
+    CampusID      int                 `json:"campus_id"`
+    IsFirstLogin  bool                `json:"is_first_login"`
+    CreatedAt     time.Time           `json:"created_at"`
+    LatestUpdate  time.Time           `json:"latest_update"`
+    StudentData   *StudentMeData      `json:"student_data,omitempty"`
+}
+
+type StudentMeData struct {
+    StudentID      uint   `json:"student_id"`
+    StudentNumber  string `json:"student_number"`
+    FacultyID      uint   `json:"faculty_id"`
+    DepartmentID   uint   `json:"department_id"`
+}
+
+// UpdateUserRequest ใช้สำหรับอัพเดทข้อมูล current user
+type UpdateUserRequest struct {
+    Firstname    *string `json:"firstname"`
+    Lastname     *string `json:"lastname"`
+    ImagePath    *string `json:"image_path"`
+    CampusID     *int    `json:"campus_id"`
+    RoleID       *int    `json:"role_id"`
+    IsFirstLogin *bool   `json:"is_first_login"`
 }

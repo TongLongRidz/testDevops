@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -41,7 +40,19 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 
     return c.JSON(fiber.Map{
         "token": token,
-        "user":  fiber.Map{"id": user.UserID, "email": user.Email, "role": user.RoleID},
+        "user": fiber.Map{
+            "user_id":        user.UserID,
+            "firstname":      user.Firstname,
+            "lastname":       user.Lastname,
+            "email":          user.Email,
+            "image_path":     user.ImagePath,
+            "provider":       user.Provider,
+            "role_id":        user.RoleID,
+            "campus_id":      user.CampusID,
+            "is_first_login": user.IsFirstLogin,
+            "created_at":     user.CreatedAt,
+            "latest_update":  user.LatestUpdate,
+        },
     })
 }
 
@@ -69,16 +80,87 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
         return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
     }
 
-    user, ok := u.(*models.User) // ตรวจว่าตรงกับ type ของ project
+    user, ok := u.(*models.User)
     if !ok {
         return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "invalid user"})
     }
 
+    // ดึงข้อมูล user แบบเต็มจาก database
+    fullUser, err := h.AuthService.GetUserByID(c.Context(), user.UserID)
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch user"})
+    }
+
+    // สร้าง response object
+    response := authDto.MeResponse{
+        UserID:       fullUser.UserID,
+        Firstname:    fullUser.Firstname,
+        Lastname:     fullUser.Lastname,
+        Email:        fullUser.Email,
+        ImagePath:    fullUser.ImagePath,
+        Provider:     fullUser.Provider,
+        RoleID:       fullUser.RoleID,
+        CampusID:     fullUser.CampusID,
+        IsFirstLogin: fullUser.IsFirstLogin,
+        CreatedAt:    fullUser.CreatedAt,
+        LatestUpdate: fullUser.LatestUpdate,
+    }
+
+    // ถ้า RoleID = 1 (Student) ให้ดึงข้อมูล Student ด้วย
+    if fullUser.RoleID == 1 && h.StudentService != nil {
+        student, err := h.StudentService.GetStudentByUserID(c.Context(), fullUser.UserID)
+        if err == nil && student != nil {
+            response.StudentData = &authDto.StudentMeData{
+                StudentID:      student.StudentID,
+                StudentNumber:  student.StudentNumber,
+                FacultyID:      student.FacultyID,
+                DepartmentID:   student.DepartmentID,
+            }
+        }
+    }
+
     return c.JSON(fiber.Map{
+        "user": response,
+    })
+}
+
+// UpdateMe - อัพเดทข้อมูล current user
+func (h *AuthHandler) UpdateMe(c *fiber.Ctx) error {
+    u := c.Locals("current_user")
+    if u == nil {
+        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+    }
+
+    user, ok := u.(*models.User)
+    if !ok {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "invalid user"})
+    }
+
+    var req authDto.UpdateUserRequest
+    if err := c.BodyParser(&req); err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
+    }
+
+    // เรียกใช้ service เพื่ออัพเดทข้อมูล
+    updatedUser, err := h.AuthService.UpdateUser(c.Context(), user.UserID, &req)
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+    }
+
+    return c.JSON(fiber.Map{
+        "message": "user updated successfully",
         "user": fiber.Map{
-            "id":    fmt.Sprint(user.UserID),
-            "email": user.Email,
-            "roleID":  user.RoleID,
+            "user_id":        updatedUser.UserID,
+            "firstname":      updatedUser.Firstname,
+            "lastname":       updatedUser.Lastname,
+            "email":          updatedUser.Email,
+            "image_path":     updatedUser.ImagePath,
+            "provider":       updatedUser.Provider,
+            "role_id":        updatedUser.RoleID,
+            "campus_id":      updatedUser.CampusID,
+            "is_first_login": updatedUser.IsFirstLogin,
+            "created_at":     updatedUser.CreatedAt,
+            "latest_update":  updatedUser.LatestUpdate,
         },
     })
 }

@@ -1,79 +1,97 @@
 package usecase
 
 import (
-    "backend/internal/models"
-    "context"
-    "errors"
+	academicYearDTO "backend/internal/dto/academic_year_dto"
+	"backend/internal/models"
+	"backend/internal/repository"
+	"context"
 )
 
-type AcademicYearRepo interface {
-    Create(ctx context.Context, ay *models.AcademicYear) error
-    Update(ctx context.Context, ay *models.AcademicYear) error
-    Delete(ctx context.Context, id uint) error
-    GetByID(ctx context.Context, id uint) (*models.AcademicYear, error)
-    GetLatest(ctx context.Context) (*models.AcademicYear, error)
-	GetList(ctx context.Context) ([]models.AcademicYear, error)
+type AcademicYearService interface {
+	CreateAcademicYear(ctx context.Context, req *academicYearDTO.CreateAcademicYear) (*models.AcademicYear, error)
+	GetAcademicYearByID(ctx context.Context, id uint) (*models.AcademicYear, error)
+	GetAllAcademicYears(ctx context.Context) ([]models.AcademicYear, error)
+	UpdateAcademicYear(ctx context.Context, id uint, req *academicYearDTO.UpdateAcademicYear) (*models.AcademicYear, error)
+	DeleteAcademicYear(ctx context.Context, id uint) error
+	ToggleCurrent(ctx context.Context, id uint) (*models.AcademicYear, error)
+	ToggleOpenRegister(ctx context.Context, id uint) (*models.AcademicYear, error)
+	GetCurrentSemester(ctx context.Context) (*models.AcademicYear, error)
+	GetLatestAbleRegister(ctx context.Context) (*models.AcademicYear, error)
 }
 
-type AcademicYearService struct {
-    repo AcademicYearRepo
+type academicYearService struct {
+	repo repository.AcademicYearRepository
 }
 
-func NewAcademicYearService(r AcademicYearRepo) *AcademicYearService {
-    return &AcademicYearService{repo: r}
+func NewAcademicYearService(repo repository.AcademicYearRepository) AcademicYearService {
+	return &academicYearService{repo: repo}
 }
 
-// Create เพิ่มปีการศึกษา
-func (s *AcademicYearService) Create(ctx context.Context, ay *models.AcademicYear) (*models.AcademicYear, error) {
-    if ay == nil {
-        return nil, errors.New("invalid input")
-    }
-    if err := s.repo.Create(ctx, ay); err != nil {
-        return nil, err
-    }
-    return ay, nil
+func (s *academicYearService) CreateAcademicYear(ctx context.Context, req *academicYearDTO.CreateAcademicYear) (*models.AcademicYear, error) {
+	academicYear := &models.AcademicYear{
+		Year:      req.Year,
+		Semester:  req.Semester,
+		StartDate: req.StartDate,
+		EndDate:   req.EndDate,
+	}
+
+	if err := s.repo.Create(ctx, academicYear); err != nil {
+		return nil, err
+	}
+
+	return academicYear, nil
 }
 
-// Update แก้ไขปีการศึกษา (ต้องมี academic_year_id ใน ay)
-func (s *AcademicYearService) Update(ctx context.Context, ay *models.AcademicYear) (*models.AcademicYear, error) {
-    if ay == nil || ay.AcademicYearID == 0 {
-        return nil, errors.New("invalid input")
-    }
-    // ตรวจว่า record มีจริง
-    _, err := s.repo.GetByID(ctx, ay.AcademicYearID)
-    if err != nil {
-        return nil, err
-    }
-    if err := s.repo.Update(ctx, ay); err != nil {
-        return nil, err
-    }
-    return ay, nil
+func (s *academicYearService) GetAcademicYearByID(ctx context.Context, id uint) (*models.AcademicYear, error) {
+	return s.repo.GetByID(ctx, id)
 }
 
-// Delete ลบปีการศึกษา ตาม id
-func (s *AcademicYearService) Delete(ctx context.Context, id uint) error {
-    if id == 0 {
-        return errors.New("invalid id")
-    }
-    // ตรวจว่า record มีจริง
-    _, err := s.repo.GetByID(ctx, id)
-    if err != nil {
-        return err
-    }
-    return s.repo.Delete(ctx, id)
+func (s *academicYearService) GetAllAcademicYears(ctx context.Context) ([]models.AcademicYear, error) {
+	return s.repo.GetAll(ctx)
 }
 
-func (s *AcademicYearService) GetList(ctx context.Context) ([]models.AcademicYear, error) {
-    return s.repo.GetList(ctx)
+func (s *academicYearService) UpdateAcademicYear(ctx context.Context, id uint, req *academicYearDTO.UpdateAcademicYear) (*models.AcademicYear, error) {
+	academicYear, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	academicYear.Year = req.Year
+	academicYear.Semester = req.Semester
+	academicYear.StartDate = req.StartDate
+	academicYear.EndDate = req.EndDate
+
+	if err := s.repo.Update(ctx, academicYear); err != nil {
+		return nil, err
+	}
+
+	return academicYear, nil
 }
 
-func (s *AcademicYearService) GetByID(ctx context.Context, id uint) (*models.AcademicYear, error) {
-    if id == 0 {
-        return nil, errors.New("invalid id")
-    }
-    return s.repo.GetByID(ctx, id)
+func (s *academicYearService) DeleteAcademicYear(ctx context.Context, id uint) error {
+	return s.repo.Delete(ctx, id)
 }
-// GetLatest ดึงปีการศึกษาและเทอมล่าสุด
-func (s *AcademicYearService) GetLatest(ctx context.Context) (*models.AcademicYear, error) {
-    return s.repo.GetLatest(ctx)
+
+func (s *academicYearService) ToggleCurrent(ctx context.Context, id uint) (*models.AcademicYear, error) {
+	if err := s.repo.ToggleCurrent(ctx, id); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetByID(ctx, id)
+}
+
+func (s *academicYearService) ToggleOpenRegister(ctx context.Context, id uint) (*models.AcademicYear, error) {
+	if err := s.repo.ToggleOpenRegister(ctx, id); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetByID(ctx, id)
+}
+
+func (s *academicYearService) GetCurrentSemester(ctx context.Context) (*models.AcademicYear, error) {
+	return s.repo.GetCurrentSemester(ctx)
+}
+
+func (s *academicYearService) GetLatestAbleRegister(ctx context.Context) (*models.AcademicYear, error) {
+	return s.repo.GetLatestAbleRegister(ctx)
 }

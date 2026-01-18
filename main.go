@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
@@ -21,17 +22,35 @@ func main() {
 	// 2. เชื่อมต่อ Database และทำ Auto Migration
 	// ตรวจสอบให้แน่ใจว่าใน config/db.go มีการคืนค่า *gorm.DB ออกมา
 	db := config.ConnectDB()
-	
+
 	fmt.Println("Create database tables if not exist...")
 	if err := db.AutoMigrate(
 		&models.User{},
-		&models.AcademicYear{}); err != nil {
+		&models.AcademicYear{},
+		&models.Faculty{},
+		&models.Department{},
+		&models.Student{},
+		&models.AwardType{},
+		&models.AwardForm{},
+		&models.ExtracurricularActivity{},
+		&models.GoodBehavior{},
+		&models.CreativityInnovation{},
+		&models.AwardFileDirectory{},
+		&models.FormStatus{},
+	); err != nil {
 		log.Fatal("Migration failed: ", err)
 	}
 
+	// 2.5 สร้าง uploads folder อัตโนมัติ
+	uploadsDir := filepath.Join("uploads", "pdf")
+	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+		log.Fatal("Failed to create uploads directory: ", err)
+	}
+	fmt.Println("✓ Uploads directory ready")
+
 	// 3. ตั้งค่า Fiber App
 	app := fiber.New(fiber.Config{
-		AppName: "Backend with Google OAuth2",
+		AppName: "Backend JA",
 	})
 
 	// 4. ตั้งค่า Routes (ส่ง db เข้าไปเชื่อมต่อกับ Repository/Usecase/Handler)
@@ -40,7 +59,7 @@ func main() {
 	// 5. รัน Server
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "18080" // ใช้ port 18080 เป็นค่าเริ่มต้นตามที่ตั้งใน Google Console
+		port = "8080" // ใช้ port 8080 เป็นค่าเริ่มต้นตามที่ตั้งใน Google Console
 	}
 
 	fmt.Printf("🚀 Server is starting on http://localhost:%s\n", port)

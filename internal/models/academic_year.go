@@ -10,8 +10,12 @@ type AcademicYear struct {
 	Semester       int       `gorm:"column:semester" json:"semester"`
 	StartDate      time.Time `gorm:"type:date;column:start_date" json:"start_date"` // เก็บแค่วันที่
 	EndDate        time.Time `gorm:"type:date;column:end_date" json:"end_date"` // เก็บแค่วันที่
+	IsCurrent	   bool      `gorm:"column:is_current;default:false" json:"is_current"`
+	IsOpenRegister bool      `gorm:"column:is_open_register;default:false" json:"is_open_register"`
+	// CreatedAt      time.Time `gorm:"autoCreateTime;column:created_at" json:"created_at"`
+	// UpdatedAt      time.Time `gorm:"autoUpdateTime;column:updated_at" json:"updated_at"`
 }
 
 func (AcademicYear) TableName() string {
-	return "Academic_year"
+	return "Academic_Year"
 }
