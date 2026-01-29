@@ -82,7 +82,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	academicYearGroup.Put("/toggle-registration/:id", academicYearHandler.ToggleOpenRegister)
 
 	// --- Faculty Routes ---
-	facultyGroup := app.Group("/faculties")
+	facultyGroup := app.Group("/faculty")
 	facultyGroup.Post("/create", facultyHandler.CreateFaculty)
 	facultyGroup.Get("/", facultyHandler.GetAllFaculties)
 	facultyGroup.Get("/:id", facultyHandler.GetFacultyByID)
@@ -90,7 +90,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	facultyGroup.Delete("/delete/:id", facultyHandler.DeleteFaculty)
 
 	// --- Department Routes ---
-	departmentGroup := app.Group("/departments")
+	departmentGroup := app.Group("/department")
 	departmentGroup.Post("/create", departmentHandler.CreateDepartment)
 	departmentGroup.Get("/", departmentHandler.GetAllDepartments)
 	departmentGroup.Get("/:id", departmentHandler.GetDepartmentByID)
@@ -109,9 +109,9 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	studentGroup.Delete("/delete/:id", studentHandler.DeleteStudent)
 
 	awardGroup := app.Group("/awards", middleware.RequireAuth(userRepo))
-	awardGroup.Post("/submit", awardHandler.Submit)          // POST /awards/submit
-	awardGroup.Get("/all", awardHandler.GetAll)              // ดูทั้งหมด
-	awardGroup.Get("/type/:type_id", awardHandler.GetByType) // ดูแยกตามประเภท (1, 2, 3)
+	awardGroup.Post("/submit", awardHandler.Submit)                  // POST /awards/submit
+	awardGroup.Get("/search", awardHandler.GetByKeyword)             // ค้นหาและกรองพร้อม pagination (query: keyword, date, student_year, page, limit)
+	awardGroup.Get("/my/submissions", awardHandler.GetMySubmissions) // ดูการส่งฟอร์มของนักเรียน (sorted by created_at)
 
 	userGroup := app.Group("/users", middleware.RequireAuth(userRepo))
 	// userGroup.Get("/", userHandler.GetAllUsers)           // GET /users

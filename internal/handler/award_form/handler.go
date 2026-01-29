@@ -103,6 +103,7 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 			OrganizedBy:       c.FormValue("organized_by"),
 			CompetitionLevel:  c.FormValue("competition_level"),
 			ActivityCategory:  c.FormValue("activity_category"),
+			CompetitionName:   c.FormValue("competition_name"),
 		}
 		if dateStr := c.FormValue("date_received"); dateStr != "" {
 			t, _ := time.Parse("2006-01-02", dateStr) // จัด Layout เฉยๆ
@@ -121,6 +122,7 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 			OrganizedBy:      c.FormValue("organized_by"),
 			CompetitionLevel: c.FormValue("competition_level"),
 			ActivityCategory: c.FormValue("activity_category"),
+			CompetitionName:  c.FormValue("competition_name"),
 		}
 		if dateStr := c.FormValue("date_received"); dateStr != "" {
 			t, _ := time.Parse("2006-01-02", dateStr)
@@ -226,19 +228,95 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 	})
 }
 
-func (h *AwardHandler) GetAll(c *fiber.Ctx) error {
-	results, err := h.useCase.GetAllAwards(c.UserContext())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+// GetByKeyword ค้นหาและกรองตามเงื่อนไข พร้อม pagination
+// Query params: keyword, date (YYYY-MM-DD), student_year, page (default: 1), limit (default: 10)
+func (h *AwardHandler) GetByKeyword(c *fiber.Ctx) error {
+	// ดึงข้อมูล user จาก middleware
+	currentUser := c.Locals("current_user")
+	if currentUser == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Unauthorized: User not found",
+		})
 	}
-	return c.JSON(fiber.Map{"status": "success", "data": results})
+	user, ok := currentUser.(*models.User)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid user data",
+		})
+	}
+
+	// รับ query parameters
+	var req awardformdto.SearchAwardRequest
+	if err := c.QueryParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid query parameters",
+		})
+	}
+
+	// ค้นหาและกรองตามวิทยาเขตของ user
+	results, err := h.useCase.GetByKeyword(
+		c.UserContext(),
+		user.CampusID,
+		req.Keyword,
+		req.Date,
+		req.StudentYear,
+		req.Page,
+		req.Limit,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status":     "success",
+		"data":       results.Data,
+		"pagination": results.Pagination,
+	})
 }
 
-func (h *AwardHandler) GetByType(c *fiber.Ctx) error {
-	typeID, _ := c.ParamsInt("type_id")
-	results, err := h.useCase.GetAwardsByType(c.UserContext(), typeID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+func (h *AwardHandler) GetMySubmissions(c *fiber.Ctx) error {
+	// ดึงข้อมูล user จาก middleware
+	currentUser := c.Locals("current_user")
+	if currentUser == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Unauthorized: User not found",
+		})
 	}
-	return c.JSON(fiber.Map{"status": "success", "data": results})
+	user, ok := currentUser.(*models.User)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid user data",
+		})
+	}
+
+	// ดึงข้อมูล student จาก userID
+	student, err := h.studentService.GetStudentByUserID(c.UserContext(), user.UserID)
+	if err != nil || student == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Student profile not found",
+		})
+	}
+
+	// ดึงการส่งฟอร์มของนักเรียนนี้ (sorted by created_at desc)
+	results, err := h.useCase.GetAwardsByStudentID(c.UserContext(), int(student.StudentID))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status": "success",
+		"data":   results,
+	})
 }

@@ -17,6 +17,6 @@ type DepartmentResponse struct {
 }
 
 type DepartmentWithFacultyResponse struct {
-	DepartmentID   uint   `json:"department_id"`
-	FacultyID      uint   `json:"faculty_id"`
+	DepartmentID uint `json:"department_id"`
+	FacultyID    uint `json:"faculty_id"`
 }

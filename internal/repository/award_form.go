@@ -54,10 +54,42 @@ func (r *AwardRepository) CreateWithTransaction(ctx context.Context, form *model
 	})
 }
 
-// GetAll และ GetByType คงเดิมตามที่คุณเขียนไว้ (ซึ่งถูกต้องแล้วในการ Preload AwardFiles)
-func (r *AwardRepository) GetAll(ctx context.Context) ([]models.AwardForm, error) {
+// GetByKeyword ค้นหาและกรองพร้อม pagination
+func (r *AwardRepository) GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int) ([]models.AwardForm, int64, error) {
 	var list []models.AwardForm
-	err := r.db.WithContext(ctx).
+	var total int64
+
+	// สร้าง query พื้นฐาน - กรองตามวิทยาเขตเสมอ
+	query := r.db.WithContext(ctx).Model(&models.AwardForm{}).Where("campus_id = ?", campusID)
+
+	// ค้นหาด้วย keyword (firstname, lastname, studentNumber, semester, year, award_type_id)
+	if keyword != "" {
+		query = query.Where(
+			"student_firstname LIKE ? OR student_lastname LIKE ? OR student_number LIKE ? OR CAST(semester AS CHAR) LIKE ? OR CAST(academic_year AS CHAR) LIKE ? OR CAST(award_type_id AS CHAR) LIKE ?",
+			"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%",
+		)
+	}
+
+	// กรองตามวันที่ (ถ้ามี)
+	if date != "" {
+		query = query.Where("DATE(created_at) = ?", date)
+	}
+
+	// กรองตามชั้นปี (ถ้ามี)
+	if studentYear > 0 {
+		query = query.Where("student_year = ?", studentYear)
+	}
+
+	// นับจำนวนทั้งหมด
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// คำนวณ offset
+	offset := (page - 1) * limit
+
+	// ดึงข้อมูลพร้อม pagination และ preload
+	err := query.
 		Preload("Student.User").
 		Preload("Student.Faculty").
 		Preload("Student.Department").
@@ -65,16 +97,19 @@ func (r *AwardRepository) GetAll(ctx context.Context) ([]models.AwardForm, error
 		Preload("Extracurricular").
 		Preload("GoodBehavior").
 		Preload("Creativity").
-		Preload("AwardFiles"). // ดึงข้อมูลไฟล์แนบมาแสดงผลด้วย
+		Preload("AwardFiles").
 		Order("created_at desc").
+		Limit(limit).
+		Offset(offset).
 		Find(&list).Error
-	return list, err
+
+	return list, total, err
 }
 
-func (r *AwardRepository) GetByType(ctx context.Context, typeID int) ([]models.AwardForm, error) {
+func (r *AwardRepository) GetByType(ctx context.Context, typeID int, campusID int) ([]models.AwardForm, error) {
 	var list []models.AwardForm
 	query := r.db.WithContext(ctx).
-		Where("award_type_id = ?", typeID).
+		Where("award_type_id = ? AND campus_id = ?", typeID, campusID).
 		Preload("Student.User").
 		Preload("Student.Faculty").
 		Preload("Student.Department").
@@ -91,6 +126,23 @@ func (r *AwardRepository) GetByType(ctx context.Context, typeID int) ([]models.A
 	}
 
 	err := query.Order("created_at desc").Find(&list).Error
+	return list, err
+}
+
+func (r *AwardRepository) GetByStudentID(ctx context.Context, studentID int) ([]models.AwardForm, error) {
+	var list []models.AwardForm
+	err := r.db.WithContext(ctx).
+		Where("student_id = ?", studentID).
+		Preload("Student.User").
+		Preload("Student.Faculty").
+		Preload("Student.Department").
+		Preload("AwardType").
+		Preload("Extracurricular").
+		Preload("GoodBehavior").
+		Preload("Creativity").
+		Preload("AwardFiles").
+		Order("created_at desc").
+		Find(&list).Error
 	return list, err
 }
 

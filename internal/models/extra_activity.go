@@ -15,6 +15,7 @@ type ExtracurricularActivity struct {
 	OrganizedBy       string    `gorm:"column:organized_by" json:"organized_by"`
 	CompetitionLevel  string    `gorm:"column:competition_level" json:"competition_level"`
 	ActivityCategory  string    `gorm:"column:activity_category" json:"activity_category"`
+	CompetitionName   string    `gorm:"column:competition_name" json:"competition_name"`
 }
 
 func (ExtracurricularActivity) TableName() string {

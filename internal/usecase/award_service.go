@@ -11,21 +11,21 @@ import (
 type AwardUseCase interface {
 	// ปรับปรุง: รับ userID เพื่อดึงข้อมูล student และ files
 	SubmitAward(ctx context.Context, userID uint, input awardformdto.SubmitAwardRequest, files []models.AwardFileDirectory) error
-	GetAllAwards(ctx context.Context) ([]awardformdto.AwardFormResponse, error)
-	GetAwardsByType(ctx context.Context, typeID int) ([]awardformdto.AwardFormResponse, error)
+	GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int) (*awardformdto.PaginatedAwardResponse, error)
+	GetAwardsByStudentID(ctx context.Context, studentID int) ([]awardformdto.AwardFormResponse, error)
 	IsDuplicate(studentID int, year int, semester int) (bool, error)
 }
 
 type awardUseCase struct {
-	repo               *repository.AwardRepository
-	studentService     StudentService
+	repo                *repository.AwardRepository
+	studentService      StudentService
 	academicYearService AcademicYearService
 }
 
 func NewAwardUseCase(r *repository.AwardRepository, ss StudentService, ays AcademicYearService) AwardUseCase {
 	return &awardUseCase{
-		repo:               r,
-		studentService:     ss,
+		repo:                r,
+		studentService:      ss,
 		academicYearService: ays,
 	}
 }
@@ -82,6 +82,7 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 			OrganizedBy:       input.Extracurricular.OrganizedBy,
 			CompetitionLevel:  input.Extracurricular.CompetitionLevel,
 			ActivityCategory:  input.Extracurricular.ActivityCategory,
+			CompetitionName:   input.Extracurricular.CompetitionName,
 		}
 	case 2: // Good Behavior (ตัวอย่างถ้ามีข้อมูลต้องกรอกให้ใส่เพิ่มแบบ case 1)
 		detail = &models.GoodBehavior{}
@@ -97,6 +98,7 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 			OrganizedBy:      input.Creativity.OrganizedBy,
 			CompetitionLevel: input.Creativity.CompetitionLevel,
 			ActivityCategory: input.Creativity.ActivityCategory,
+			CompetitionName:  input.Creativity.CompetitionName,
 		}
 	default:
 		return errors.New("invalid award type id")
@@ -156,20 +158,44 @@ func mapToAwardResponse(item models.AwardForm) awardformdto.AwardFormResponse {
 	return res
 }
 
-func (u *awardUseCase) GetAllAwards(ctx context.Context) ([]awardformdto.AwardFormResponse, error) {
-	results, err := u.repo.GetAll(ctx)
+func (u *awardUseCase) GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int) (*awardformdto.PaginatedAwardResponse, error) {
+	// ตั้งค่า default สำหรับ pagination
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+
+	results, total, err := u.repo.GetByKeyword(ctx, campusID, keyword, date, studentYear, page, limit)
 	if err != nil {
 		return nil, err
 	}
+
 	var response []awardformdto.AwardFormResponse
 	for _, item := range results {
 		response = append(response, mapToAwardResponse(item))
 	}
-	return response, nil
+
+	// คำนวณจำนวนหน้า
+	totalPages := int(total) / limit
+	if int(total)%limit > 0 {
+		totalPages++
+	}
+
+	return &awardformdto.PaginatedAwardResponse{
+		Data: response,
+		Pagination: awardformdto.PaginationMeta{
+			CurrentPage: page,
+			TotalPages:  totalPages,
+			TotalItems:  total,
+			Limit:       limit,
+		},
+	}, nil
 }
 
-func (u *awardUseCase) GetAwardsByType(ctx context.Context, typeID int) ([]awardformdto.AwardFormResponse, error) {
-	results, err := u.repo.GetByType(ctx, typeID)
+func (u *awardUseCase) GetAwardsByStudentID(ctx context.Context, studentID int) ([]awardformdto.AwardFormResponse, error) {
+	results, err := u.repo.GetByStudentID(ctx, studentID)
 	if err != nil {
 		return nil, err
 	}

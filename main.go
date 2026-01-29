@@ -4,6 +4,7 @@ import (
 	"backend/config"
 	"backend/internal/models"
 	"backend/internal/server"
+	"backend/migration"
 	"fmt"
 	"log"
 	"os"
@@ -25,11 +26,14 @@ func main() {
 
 	fmt.Println("Create database tables if not exist...")
 	if err := db.AutoMigrate(
+		&models.Role{},
 		&models.User{},
+		&models.Campus{},
 		&models.AcademicYear{},
 		&models.Faculty{},
 		&models.Department{},
 		&models.Student{},
+		&models.StudentDevelopment{},
 		&models.AwardType{},
 		&models.AwardForm{},
 		&models.ExtracurricularActivity{},
@@ -37,6 +41,11 @@ func main() {
 		&models.CreativityInnovation{},
 		&models.AwardFileDirectory{},
 		&models.FormStatus{},
+		&models.Committee{},
+		&models.Dean{},
+		&models.AssociateDean{},
+		&models.HeadOfDepartment{},
+		&models.President{},
 	); err != nil {
 		log.Fatal("Migration failed: ", err)
 	}
@@ -47,6 +56,27 @@ func main() {
 		log.Fatal("Failed to create uploads directory: ", err)
 	}
 	fmt.Println("✓ Uploads directory ready")
+
+	// 2.6 Seed Campus ลงฐานข้อมูล
+	fmt.Println("Seeding Campus data...")
+	if err := migration.SeedCampus(db); err != nil {
+		log.Fatal("Seeding Campus failed: ", err)
+	}
+	fmt.Println("✓ Campus seeded successfully")
+
+	// 2.7 Seed FormStatus ลงฐานข้อมูล
+	fmt.Println("Seeding FormStatus data...")
+	if err := migration.SeedFormStatus(db); err != nil {
+		log.Fatal("Seeding FormStatus failed: ", err)
+	}
+	fmt.Println("✓ FormStatus seeded successfully")
+
+	// 2.8 Seed Role ลงฐานข้อมูล
+	fmt.Println("Seeding Role data...")
+	if err := migration.SeedRole(db); err != nil {
+		log.Fatal("Seeding Role failed: ", err)
+	}
+	fmt.Println("✓ Role seeded successfully")
 
 	// 3. ตั้งค่า Fiber App
 	app := fiber.New(fiber.Config{

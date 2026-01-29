@@ -8,13 +8,13 @@ import (
 type SubmitAwardRequest struct {
 	// ข้อมูลเหล่านี้จะดึงจาก Token: StudentID, StudentFirstname, StudentLastname, Email, StudentNumber, FacultyID, DepartmentID, CampusID
 	// ข้อมูลเหล่านี้จะดึงจาก Academic Year Service: AcademicYear, Semester
-	AwardTypeID      int       `json:"award_type_id" binding:"required"`
-	StudentYear      int       `json:"student_year" binding:"required"`
-	AdvisorName      string    `json:"advisor_name" binding:"required"`
-	PhoneNumber      string    `json:"phone_number" binding:"required"`
-	Address          string    `json:"address" binding:"required"`
-	GPA              float64   `json:"gpa" binding:"required"`
-	DateOfBirth      time.Time `json:"date_of_birth" binding:"required"`
+	AwardTypeID int       `json:"award_type_id" binding:"required"`
+	StudentYear int       `json:"student_year" binding:"required"`
+	AdvisorName string    `json:"advisor_name" binding:"required"`
+	PhoneNumber string    `json:"phone_number" binding:"required"`
+	Address     string    `json:"address" binding:"required"`
+	GPA         float64   `json:"gpa" binding:"required"`
+	DateOfBirth time.Time `json:"date_of_birth" binding:"required"`
 
 	Extracurricular *ExtracurricularRequest `json:"extracurricular_detail,omitempty"`
 	Creativity      *CreativityRequest      `json:"creativity_detail,omitempty"`
@@ -30,6 +30,7 @@ type ExtracurricularRequest struct {
 	OrganizedBy       string    `json:"organized_by"`
 	CompetitionLevel  string    `json:"competition_level"`
 	ActivityCategory  string    `json:"activity_category"`
+	CompetitionName   string    `json:"competition_name"`
 }
 
 type CreativityRequest struct {
@@ -40,6 +41,7 @@ type CreativityRequest struct {
 	OrganizedBy      string    `json:"organized_by"`
 	CompetitionLevel string    `json:"competition_level"`
 	ActivityCategory string    `json:"activity_category"`
+	CompetitionName  string    `json:"competition_name"`
 }
 
 type GoodBehaviorRequest struct {
@@ -48,28 +50,28 @@ type GoodBehaviorRequest struct {
 
 // --- Response DTOs ---
 type AwardFormResponse struct {
-	FormID           uint           `json:"form_id"`
-	StudentID        int            `json:"student_id"`
-	StudentFirstname string         `json:"student_firstname"`
-	StudentLastname  string         `json:"student_lastname"`
-	Email            string         `json:"email"`
-	StudentNumber    string         `json:"student_number"`
-	FacultyID        int            `json:"faculty_id"`
-	DepartmentID     int            `json:"department_id"`
-	CampusID         int            `json:"campus_id"`
-	AcademicYear     int            `json:"academic_year"`
-	Semester         int            `json:"semester"`
-	FormStatusID     int            `json:"form_status_id"`
-	AwardTypeID      int            `json:"award_type_id"`
-	AwardTypeName    string         `json:"award_type_name"`
-	CreatedAt        time.Time      `json:"created_at"`
-	LatestUpdate     time.Time      `json:"latest_update"`
-	StudentYear      int            `json:"student_year"`
-	AdvisorName      string         `json:"advisor_name"`
-	PhoneNumber      string         `json:"phone_number"`
-	Address          string         `json:"address"`
-	GPA              float64        `json:"gpa"`
-	DateOfBirth      time.Time      `json:"date_of_birth"`
+	FormID           uint      `json:"form_id"`
+	StudentID        int       `json:"student_id"`
+	StudentFirstname string    `json:"student_firstname"`
+	StudentLastname  string    `json:"student_lastname"`
+	Email            string    `json:"email"`
+	StudentNumber    string    `json:"student_number"`
+	FacultyID        int       `json:"faculty_id"`
+	DepartmentID     int       `json:"department_id"`
+	CampusID         int       `json:"campus_id"`
+	AcademicYear     int       `json:"academic_year"`
+	Semester         int       `json:"semester"`
+	FormStatusID     int       `json:"form_status_id"`
+	AwardTypeID      int       `json:"award_type_id"`
+	AwardTypeName    string    `json:"award_type_name"`
+	CreatedAt        time.Time `json:"created_at"`
+	LatestUpdate     time.Time `json:"latest_update"`
+	StudentYear      int       `json:"student_year"`
+	AdvisorName      string    `json:"advisor_name"`
+	PhoneNumber      string    `json:"phone_number"`
+	Address          string    `json:"address"`
+	GPA              float64   `json:"gpa"`
+	DateOfBirth      time.Time `json:"date_of_birth"`
 
 	// ข้อมูลรายละเอียด (จะถูกเติมเฉพาะประเภทที่ตรงกัน)
 	Detail interface{} `json:"detail,omitempty"`
@@ -84,4 +86,25 @@ type FileResponse struct {
 	FileType  string `json:"file_type"`
 	FileSize  int64  `json:"file_size"`
 	FilePath  string `json:"file_path"`
+}
+
+// --- Search & Pagination DTOs ---
+type SearchAwardRequest struct {
+	Keyword     string `query:"keyword"`      // ค้นหาใน firstname, lastname, studentNumber, semester, year, type
+	Date        string `query:"date"`         // กรองตามวันที่ (format: YYYY-MM-DD)
+	StudentYear int    `query:"student_year"` // กรองตามชั้นปี
+	Page        int    `query:"page"`         // หน้าปัจจุบัน (default: 1)
+	Limit       int    `query:"limit"`        // จำนวนต่อหน้า (default: 10)
+}
+
+type PaginatedAwardResponse struct {
+	Data       []AwardFormResponse `json:"data"`
+	Pagination PaginationMeta      `json:"pagination"`
+}
+
+type PaginationMeta struct {
+	CurrentPage int   `json:"current_page"`
+	TotalPages  int   `json:"total_pages"`
+	TotalItems  int64 `json:"total_items"`
+	Limit       int   `json:"limit"`
 }

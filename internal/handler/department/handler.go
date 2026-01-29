@@ -34,8 +34,8 @@ func (h *DepartmentHandler) CreateDepartment(c *fiber.Ctx) error {
 	}
 
 	response := &departmentDTO.DepartmentWithFacultyResponse{
-		DepartmentID:   department.DepartmentID,
-		FacultyID:      department.FacultyID,
+		DepartmentID: department.DepartmentID,
+		FacultyID:    department.FacultyID,
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
@@ -56,8 +56,8 @@ func (h *DepartmentHandler) GetAllDepartments(c *fiber.Ctx) error {
 	var responses []departmentDTO.DepartmentWithFacultyResponse
 	for _, d := range departments {
 		responses = append(responses, departmentDTO.DepartmentWithFacultyResponse{
-			DepartmentID:   d.DepartmentID,
-			FacultyID:      d.FacultyID,
+			DepartmentID: d.DepartmentID,
+			FacultyID:    d.FacultyID,
 		})
 	}
 
@@ -84,8 +84,8 @@ func (h *DepartmentHandler) GetDepartmentByID(c *fiber.Ctx) error {
 	}
 
 	response := &departmentDTO.DepartmentWithFacultyResponse{
-		DepartmentID:   department.DepartmentID,
-		FacultyID:      department.FacultyID,
+		DepartmentID: department.DepartmentID,
+		FacultyID:    department.FacultyID,
 	}
 
 	return c.JSON(fiber.Map{
@@ -113,8 +113,8 @@ func (h *DepartmentHandler) GetDepartmentsByFacultyID(c *fiber.Ctx) error {
 	var responses []departmentDTO.DepartmentWithFacultyResponse
 	for _, d := range departments {
 		responses = append(responses, departmentDTO.DepartmentWithFacultyResponse{
-			DepartmentID:   d.DepartmentID,
-			FacultyID:      d.FacultyID,
+			DepartmentID: d.DepartmentID,
+			FacultyID:    d.FacultyID,
 		})
 	}
 
@@ -148,8 +148,8 @@ func (h *DepartmentHandler) UpdateDepartment(c *fiber.Ctx) error {
 	}
 
 	response := &departmentDTO.DepartmentWithFacultyResponse{
-		DepartmentID:   department.DepartmentID,
-		FacultyID:      department.FacultyID,
+		DepartmentID: department.DepartmentID,
+		FacultyID:    department.FacultyID,
 	}
 
 	return c.JSON(fiber.Map{
