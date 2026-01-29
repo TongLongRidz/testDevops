@@ -114,8 +114,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	awardGroup.Get("/my/submissions", awardHandler.GetMySubmissions) // ดูการส่งฟอร์มของนักเรียน (sorted by created_at)
 
 	userGroup := app.Group("/users", middleware.RequireAuth(userRepo))
-	// userGroup.Get("/", userHandler.GetAllUsers)           // GET /users
+	userGroup.Get("/", userHandler.GetAllUsersByCampus)      // GET /users (ดึง user ตามวิทยาเขตของคนที่ login)
 	userGroup.Get("/:id", userHandler.GetUserByID)           // GET /users/:id
-	userGroup.Put("/update/:id", userHandler.UpdateUserByID) // PUT /users/:id ยังไม่ได้เช็ค
-	// userGroup.Delete("/:id", userHandler.DeleteUserByID)  // DELETE /users/:id
+	userGroup.Put("/update/:id", userHandler.UpdateUserByID) // PUT /users/:id
 }

@@ -146,6 +146,25 @@ func (r *AwardRepository) GetByStudentID(ctx context.Context, studentID int) ([]
 	return list, err
 }
 
+func (r *AwardRepository) GetByFormID(ctx context.Context, formID int) (*models.AwardForm, error) {
+	var form models.AwardForm
+	err := r.db.WithContext(ctx).
+		Where("form_id = ?", formID).
+		Preload("Student.User").
+		Preload("Student.Faculty").
+		Preload("Student.Department").
+		Preload("AwardType").
+		Preload("Extracurricular").
+		Preload("GoodBehavior").
+		Preload("Creativity").
+		Preload("AwardFiles").
+		First(&form).Error
+	if err != nil {
+		return nil, err
+	}
+	return &form, nil
+}
+
 func (r *AwardRepository) CheckDuplicate(studentID int, year int, semester int) (bool, error) {
 	var count int64
 	// เช็คในตาราง AwardForm ว่ามีข้อมูลที่ student_id, academic_year, semester ตรงกันไหม

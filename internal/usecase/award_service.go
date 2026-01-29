@@ -13,6 +13,7 @@ type AwardUseCase interface {
 	SubmitAward(ctx context.Context, userID uint, input awardformdto.SubmitAwardRequest, files []models.AwardFileDirectory) error
 	GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int) (*awardformdto.PaginatedAwardResponse, error)
 	GetAwardsByStudentID(ctx context.Context, studentID int) ([]awardformdto.AwardFormResponse, error)
+	GetByFormID(ctx context.Context, formID int) (*awardformdto.AwardFormResponse, error)
 	IsDuplicate(studentID int, year int, semester int) (bool, error)
 }
 
@@ -204,6 +205,20 @@ func (u *awardUseCase) GetAwardsByStudentID(ctx context.Context, studentID int) 
 		response = append(response, mapToAwardResponse(item))
 	}
 	return response, nil
+}
+
+func (u *awardUseCase) GetByFormID(ctx context.Context, formID int) (*awardformdto.AwardFormResponse, error) {
+	form, err := u.repo.GetByFormID(ctx, formID)
+	if err != nil {
+		return nil, err
+	}
+
+	if form == nil {
+		return nil, errors.New("form not found")
+	}
+
+	response := mapToAwardResponse(*form)
+	return &response, nil
 }
 
 func (u *awardUseCase) IsDuplicate(studentID int, year int, semester int) (bool, error) {
