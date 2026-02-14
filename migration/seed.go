@@ -58,14 +58,14 @@ func SeedCampus(db *gorm.DB) error {
 
 func SeedRole(db *gorm.DB) error {
 	roles := []models.Role{
-		{RoleName: "Student"},
-		{RoleName: "Head of Department"},
-		{RoleName: "Associate Dean"},
-		{RoleName: "Dean"},
-		{RoleName: "Student Development"},
-		{RoleName: "Committee"},
-		{RoleName: "Committee President"},
-		{RoleName: "Chancellor"},
+		{RoleName: "Student", RoleNameTH: "นักศึกษา"},
+		{RoleName: "Head of Department", RoleNameTH: "หัวหน้าภาควิชา"},
+		{RoleName: "Associate Dean", RoleNameTH: "รองคณบดี"},
+		{RoleName: "Dean", RoleNameTH: "คณบดี"},
+		{RoleName: "Student Development", RoleNameTH: "กองพัฒนานิสิต"},
+		{RoleName: "Committee", RoleNameTH: "คณะกรรมการ"},
+		{RoleName: "Committee President", RoleNameTH: "ประธานคณะกรรมการ"},
+		{RoleName: "Chancellor", RoleNameTH: "อธิการบดี"},
 	}
 
 	// ตรวจสอบว่า Role มีข้อมูลอยู่แล้วหรือไม่

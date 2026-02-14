@@ -95,6 +95,7 @@ type SearchAwardRequest struct {
 	StudentYear int    `query:"student_year"` // กรองตามชั้นปี
 	Page        int    `query:"page"`         // หน้าปัจจุบัน (default: 1)
 	Limit       int    `query:"limit"`        // จำนวนต่อหน้า (default: 10)
+	Arrangement string `query:"arrangement"` // เรียงลำดับ: asc หรือ desc (default: desc)
 }
 
 type PaginatedAwardResponse struct {
@@ -107,4 +108,31 @@ type PaginationMeta struct {
 	TotalPages  int   `json:"total_pages"`
 	TotalItems  int64 `json:"total_items"`
 	Limit       int   `json:"limit"`
+}
+
+// --- Award Form Log DTOs ---
+type CreateAwardFormLogRequest struct {
+	FormID    uint   `json:"form_id" binding:"required"`
+	FieldName string `json:"field_name" binding:"required"`
+	OldValue  string `json:"old_value"`
+	NewValue  string `json:"new_value"`
+}
+
+type UpdateAwardTypeRequest struct {
+	AwardTypeID int `json:"award_type_id" binding:"required"`
+}
+
+type UpdateFormStatusRequest struct {
+	FormStatusID int `json:"form_status_id" binding:"required"`
+}
+
+type AwardFormLogResponse struct {
+	LogID      uint      `json:"log_id"`
+	FormID     uint      `json:"form_id"`
+	FieldName  string    `json:"field_name"`
+	OldValue   string    `json:"old_value"`
+	NewValue   string    `json:"new_value"`
+	ChangedBy  *int      `json:"changed_by"`
+	CreatedAt  time.Time `json:"created_at"`
+	LatestEdit time.Time `json:"latest_edit"`
 }

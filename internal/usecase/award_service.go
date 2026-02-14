@@ -6,26 +6,32 @@ import (
 	"backend/internal/repository"
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 )
 
 type AwardUseCase interface {
 	// ปรับปรุง: รับ userID เพื่อดึงข้อมูล student และ files
 	SubmitAward(ctx context.Context, userID uint, input awardformdto.SubmitAwardRequest, files []models.AwardFileDirectory) error
-	GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int) (*awardformdto.PaginatedAwardResponse, error)
+	GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int, arrangement string) (*awardformdto.PaginatedAwardResponse, error)
 	GetAwardsByStudentID(ctx context.Context, studentID int) ([]awardformdto.AwardFormResponse, error)
 	GetByFormID(ctx context.Context, formID int) (*awardformdto.AwardFormResponse, error)
 	IsDuplicate(studentID int, year int, semester int) (bool, error)
+	UpdateAwardType(ctx context.Context, formID uint, awardTypeID int, changedBy uint) error
+	UpdateFormStatus(ctx context.Context, formID uint, formStatusID int, changedBy uint) error
 }
 
 type awardUseCase struct {
 	repo                *repository.AwardRepository
+	logUseCase          AwardFormLogUseCase
 	studentService      StudentService
 	academicYearService AcademicYearService
 }
 
-func NewAwardUseCase(r *repository.AwardRepository, ss StudentService, ays AcademicYearService) AwardUseCase {
+func NewAwardUseCase(r *repository.AwardRepository, ss StudentService, ays AcademicYearService, logUC AwardFormLogUseCase) AwardUseCase {
 	return &awardUseCase{
 		repo:                r,
+		logUseCase:          logUC,
 		studentService:      ss,
 		academicYearService: ays,
 	}
@@ -159,7 +165,7 @@ func mapToAwardResponse(item models.AwardForm) awardformdto.AwardFormResponse {
 	return res
 }
 
-func (u *awardUseCase) GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int) (*awardformdto.PaginatedAwardResponse, error) {
+func (u *awardUseCase) GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int, arrangement string) (*awardformdto.PaginatedAwardResponse, error) {
 	// ตั้งค่า default สำหรับ pagination
 	if page < 1 {
 		page = 1
@@ -167,8 +173,12 @@ func (u *awardUseCase) GetByKeyword(ctx context.Context, campusID int, keyword s
 	if limit < 1 {
 		limit = 10
 	}
+	order := "desc"
+	if strings.ToLower(arrangement) == "asc" {
+		order = "asc"
+	}
 
-	results, total, err := u.repo.GetByKeyword(ctx, campusID, keyword, date, studentYear, page, limit)
+	results, total, err := u.repo.GetByKeyword(ctx, campusID, keyword, date, studentYear, page, limit, order)
 	if err != nil {
 		return nil, err
 	}
@@ -223,4 +233,62 @@ func (u *awardUseCase) GetByFormID(ctx context.Context, formID int) (*awardformd
 
 func (u *awardUseCase) IsDuplicate(studentID int, year int, semester int) (bool, error) {
 	return u.repo.CheckDuplicate(studentID, year, semester)
+}
+
+func (u *awardUseCase) UpdateAwardType(ctx context.Context, formID uint, awardTypeID int, changedBy uint) error {
+	form, err := u.repo.GetByFormID(ctx, int(formID))
+	if err != nil {
+		return err
+	}
+	if form == nil {
+		return errors.New("form not found")
+	}
+	if awardTypeID <= 0 {
+		return errors.New("award_type_id must be greater than 0")
+	}
+	if form.AwardTypeID == awardTypeID {
+		return nil
+	}
+
+	oldValue := form.AwardTypeID
+	if err := u.repo.UpdateAwardType(ctx, formID, awardTypeID); err != nil {
+		return err
+	}
+
+	_, err = u.logUseCase.CreateLog(ctx, changedBy, &awardformdto.CreateAwardFormLogRequest{
+		FormID:    formID,
+		FieldName: "award_type_id",
+		OldValue:  strconv.Itoa(oldValue),
+		NewValue:  strconv.Itoa(awardTypeID),
+	})
+	return err
+}
+
+func (u *awardUseCase) UpdateFormStatus(ctx context.Context, formID uint, formStatusID int, changedBy uint) error {
+	form, err := u.repo.GetByFormID(ctx, int(formID))
+	if err != nil {
+		return err
+	}
+	if form == nil {
+		return errors.New("form not found")
+	}
+	if formStatusID <= 0 {
+		return errors.New("form_status_id must be greater than 0")
+	}
+	if form.FormStatusID == formStatusID {
+		return nil
+	}
+
+	oldValue := form.FormStatusID
+	if err := u.repo.UpdateFormStatus(ctx, formID, formStatusID); err != nil {
+		return err
+	}
+
+	_, err = u.logUseCase.CreateLog(ctx, changedBy, &awardformdto.CreateAwardFormLogRequest{
+		FormID:    formID,
+		FieldName: "form_status_id",
+		OldValue:  strconv.Itoa(oldValue),
+		NewValue:  strconv.Itoa(formStatusID),
+	})
+	return err
 }

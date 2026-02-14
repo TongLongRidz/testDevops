@@ -9,6 +9,24 @@ type RegisterRequest struct {
     ConfirmPassword string `json:"confirmPassword" validate:"required,eqfield=Password"`
 }
 
+// RegisterWithRoleRequest ใช้สำหรับสร้าง account ที่กำหนด role ได้
+type RegisterWithRoleRequest struct {
+    Email           string `json:"email" validate:"required,email"`
+    Password        string `json:"password" validate:"required,min=6"`
+    ConfirmPassword string `json:"confirmPassword" validate:"required,eqfield=Password"`
+    Firstname       string `json:"firstname"`
+    Lastname        string `json:"lastname"`
+    RoleID          int    `json:"role_id" validate:"required"`
+    CampusID        int    `json:"campus_id" validate:"required"`
+
+    // Optional fields สำหรับ role เฉพาะ
+    StudentNumber string `json:"student_number"`
+    FacultyID     uint   `json:"faculty_id"`
+    DepartmentID  uint   `json:"department_id"`
+    AdCode        string `json:"ad_code"`
+    IsChairman    *bool  `json:"is_chairman"`
+}
+
 // LoginRequest ใช้สำหรับรับข้อมูลตอนเข้าสู่ระบบด้วย Email/Password
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`

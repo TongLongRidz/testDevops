@@ -3,6 +3,7 @@ package repository
 import (
 	"backend/internal/models"
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -55,7 +56,7 @@ func (r *AwardRepository) CreateWithTransaction(ctx context.Context, form *model
 }
 
 // GetByKeyword ค้นหาและกรองพร้อม pagination
-func (r *AwardRepository) GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int) ([]models.AwardForm, int64, error) {
+func (r *AwardRepository) GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int, arrangement string) ([]models.AwardForm, int64, error) {
 	var list []models.AwardForm
 	var total int64
 
@@ -89,6 +90,11 @@ func (r *AwardRepository) GetByKeyword(ctx context.Context, campusID int, keywor
 	offset := (page - 1) * limit
 
 	// ดึงข้อมูลพร้อม pagination และ preload
+	orderClause := "created_at desc"
+	if arrangement == "asc" {
+		orderClause = "created_at asc"
+	}
+
 	err := query.
 		Preload("Student.User").
 		Preload("Student.Faculty").
@@ -98,7 +104,7 @@ func (r *AwardRepository) GetByKeyword(ctx context.Context, campusID int, keywor
 		Preload("GoodBehavior").
 		Preload("Creativity").
 		Preload("AwardFiles").
-		Order("created_at desc").
+		Order(orderClause).
 		Limit(limit).
 		Offset(offset).
 		Find(&list).Error
@@ -177,4 +183,24 @@ func (r *AwardRepository) CheckDuplicate(studentID int, year int, semester int) 
 	}
 
 	return count > 0, nil
+}
+
+func (r *AwardRepository) UpdateAwardType(ctx context.Context, formID uint, awardTypeID int) error {
+	return r.db.WithContext(ctx).
+		Model(&models.AwardForm{}).
+		Where("form_id = ?", formID).
+		Updates(map[string]interface{}{
+			"award_type_id": awardTypeID,
+			"latest_update": time.Now(),
+		}).Error
+}
+
+func (r *AwardRepository) UpdateFormStatus(ctx context.Context, formID uint, formStatusID int) error {
+	return r.db.WithContext(ctx).
+		Model(&models.AwardForm{}).
+		Where("form_id = ?", formID).
+		Updates(map[string]interface{}{
+			"form_status_id": formStatusID,
+			"latest_update":  time.Now(),
+		}).Error
 }

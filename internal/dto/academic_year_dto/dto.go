@@ -4,14 +4,14 @@ import "time"
 
 type CreateAcademicYear struct {
 	Year      int       `json:"year" binding:"required"`
-	Semester  int       `json:"semester" binding:"required,min=1,max=3"`
+	Semester  int       `json:"semester" binding:"required,min=1,max=2"`
 	StartDate time.Time `json:"start_date" binding:"required"`
 	EndDate   time.Time `json:"end_date" binding:"required"`
 }
 
 type UpdateAcademicYear struct {
 	Year      int       `json:"year" binding:"required"`
-	Semester  int       `json:"semester" binding:"required,min=1,max=3"`
+	Semester  int       `json:"semester" binding:"required,min=1,max=2"`
 	StartDate time.Time `json:"start_date" binding:"required"`
 	EndDate   time.Time `json:"end_date" binding:"required"`
 }

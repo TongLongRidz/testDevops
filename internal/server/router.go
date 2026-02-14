@@ -31,6 +31,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	// สร้าง User Repository เพื่อใช้จัดการข้อมูลผู้ใช้ในฐานข้อมูล
 	userRepo := repository.NewUserRepository(db)
 	awardRepo := repository.NewAwardRepository(db)
+	awardFormLogRepo := repository.NewAwardFormLogRepository(db)
 	academicYearRepo := repository.NewAcademicYearRepository(db)
 	facultyRepo := repository.NewFacultyRepository(db)
 	departmentRepo := repository.NewDepartmentRepository(db)
@@ -41,7 +42,8 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	authService := usecase.NewAuthUseWithStudent(userRepo, studentRepo, googleConfig)
 	academicYearService := usecase.NewAcademicYearService(academicYearRepo)
 	studentService := usecase.NewStudentService(studentRepo)
-	awardService := usecase.NewAwardUseCase(awardRepo, studentService, academicYearService)
+	awardFormLogService := usecase.NewAwardFormLogUseCase(awardFormLogRepo)
+	awardService := usecase.NewAwardUseCase(awardRepo, studentService, academicYearService, awardFormLogService)
 	userService := usecase.NewUserUsecase(userRepo)
 	facultyService := usecase.NewFacultyService(facultyRepo)
 	departmentService := usecase.NewDepartmentService(departmentRepo)
@@ -49,7 +51,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	// --- 4. Handler Layer (Controller) ---
 	// สร้าง Handler ที่จะรับ HTTP Request
 	authHandler := auth.NewAuthHandlerWithStudent(authService, studentService)
-	awardHandler := awardform.NewAwardHandler(awardService, studentService, academicYearService)
+	awardHandler := awardform.NewAwardHandler(awardService, studentService, academicYearService, awardFormLogService)
 	userHandler := user.NewUserHandler(userService)
 	academicYearHandler := academicyear.NewAcademicYearHandler(academicYearService)
 	facultyHandler := faculty.NewFacultyHandler(facultyService)
@@ -112,6 +114,10 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	awardGroup.Post("/submit", awardHandler.Submit)                  // POST /awards/submit
 	awardGroup.Get("/search", awardHandler.GetByKeyword)             // ค้นหาและกรองพร้อม pagination (query: keyword, date, student_year, page, limit)
 	awardGroup.Get("/my/submissions", awardHandler.GetMySubmissions) // ดูการส่งฟอร์มของนักเรียน (sorted by created_at)
+	awardGroup.Post("/:formId/logs", awardHandler.CreateLog)         // POST /awards/:formId/logs
+	awardGroup.Get("/:formId/logs", awardHandler.GetLogsByFormID)    // GET /awards/:formId/logs
+	awardGroup.Put("/:formId/award-type", awardHandler.UpdateAwardType)
+	awardGroup.Put("/:formId/form-status", awardHandler.UpdateFormStatus)
 
 	userGroup := app.Group("/users", middleware.RequireAuth(userRepo))
 	userGroup.Get("/", userHandler.GetAllUsersByCampus)      // GET /users (ดึง user ตามวิทยาเขตของคนที่ login)

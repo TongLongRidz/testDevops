@@ -16,12 +16,13 @@ import (
 
 type AwardHandler struct {
 	useCase             usecase.AwardUseCase
+	logUseCase          usecase.AwardFormLogUseCase
 	studentService      usecase.StudentService
 	academicYearService usecase.AcademicYearService
 }
 
-func NewAwardHandler(u usecase.AwardUseCase, s usecase.StudentService, ays usecase.AcademicYearService) *AwardHandler {
-	return &AwardHandler{useCase: u, studentService: s, academicYearService: ays}
+func NewAwardHandler(u usecase.AwardUseCase, s usecase.StudentService, ays usecase.AcademicYearService, l usecase.AwardFormLogUseCase) *AwardHandler {
+	return &AwardHandler{useCase: u, logUseCase: l, studentService: s, academicYearService: ays}
 }
 
 func (h *AwardHandler) Submit(c *fiber.Ctx) error {
@@ -265,6 +266,7 @@ func (h *AwardHandler) GetByKeyword(c *fiber.Ctx) error {
 		req.StudentYear,
 		req.Page,
 		req.Limit,
+		req.Arrangement,
 	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -318,5 +320,206 @@ func (h *AwardHandler) GetMySubmissions(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status": "success",
 		"data":   results,
+	})
+}
+
+func (h *AwardHandler) CreateLog(c *fiber.Ctx) error {
+	currentUser := c.Locals("current_user")
+	if currentUser == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Unauthorized: User not found",
+		})
+	}
+	user, ok := currentUser.(*models.User)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid user data",
+		})
+	}
+
+	formID, err := strconv.Atoi(c.Params("formId"))
+	if err != nil || formID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid formId",
+		})
+	}
+
+	var req awardformdto.CreateAwardFormLogRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid request body",
+		})
+	}
+	if req.FieldName == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "field_name is required",
+		})
+	}
+	req.FormID = uint(formID)
+
+	log, err := h.logUseCase.CreateLog(c.UserContext(), user.UserID, &req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"status": "success",
+		"data": awardformdto.AwardFormLogResponse{
+			LogID:      log.LogID,
+			FormID:     log.FormID,
+			FieldName:  log.FieldName,
+			OldValue:   log.OldValue,
+			NewValue:   log.NewValue,
+			ChangedBy:  log.ChangedBy,
+			CreatedAt:  log.CreatedAt,
+			LatestEdit: log.LatestEdit,
+		},
+	})
+}
+
+func (h *AwardHandler) GetLogsByFormID(c *fiber.Ctx) error {
+	formID, err := strconv.Atoi(c.Params("formId"))
+	if err != nil || formID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid formId",
+		})
+	}
+
+	logs, err := h.logUseCase.GetLogsByFormID(c.UserContext(), uint(formID))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": err.Error(),
+		})
+	}
+
+	response := make([]awardformdto.AwardFormLogResponse, 0, len(logs))
+	for _, log := range logs {
+		response = append(response, awardformdto.AwardFormLogResponse{
+			LogID:      log.LogID,
+			FormID:     log.FormID,
+			FieldName:  log.FieldName,
+			OldValue:   log.OldValue,
+			NewValue:   log.NewValue,
+			ChangedBy:  log.ChangedBy,
+			CreatedAt:  log.CreatedAt,
+			LatestEdit: log.LatestEdit,
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status": "success",
+		"data":   response,
+	})
+}
+
+func (h *AwardHandler) UpdateAwardType(c *fiber.Ctx) error {
+	currentUser := c.Locals("current_user")
+	if currentUser == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Unauthorized: User not found",
+		})
+	}
+	user, ok := currentUser.(*models.User)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid user data",
+		})
+	}
+
+	formID, err := strconv.Atoi(c.Params("formId"))
+	if err != nil || formID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid formId",
+		})
+	}
+
+	var req awardformdto.UpdateAwardTypeRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid request body",
+		})
+	}
+	if req.AwardTypeID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "award_type_id must be greater than 0",
+		})
+	}
+
+	if err := h.useCase.UpdateAwardType(c.UserContext(), uint(formID), req.AwardTypeID, user.UserID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": "award_type_id updated",
+	})
+}
+
+func (h *AwardHandler) UpdateFormStatus(c *fiber.Ctx) error {
+	currentUser := c.Locals("current_user")
+	if currentUser == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Unauthorized: User not found",
+		})
+	}
+	user, ok := currentUser.(*models.User)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid user data",
+		})
+	}
+
+	formID, err := strconv.Atoi(c.Params("formId"))
+	if err != nil || formID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid formId",
+		})
+	}
+
+	var req awardformdto.UpdateFormStatusRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid request body",
+		})
+	}
+	if req.FormStatusID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "form_status_id must be greater than 0",
+		})
+	}
+
+	if err := h.useCase.UpdateFormStatus(c.UserContext(), uint(formID), req.FormStatusID, user.UserID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": "form_status_id updated",
 	})
 }
