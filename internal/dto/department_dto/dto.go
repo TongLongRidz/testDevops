@@ -15,8 +15,3 @@ type DepartmentResponse struct {
 	FacultyID      uint   `json:"faculty_id"`
 	DepartmentName string `json:"department_name"`
 }
-
-type DepartmentWithFacultyResponse struct {
-	DepartmentID uint `json:"department_id"`
-	FacultyID    uint `json:"faculty_id"`
-}

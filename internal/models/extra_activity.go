@@ -8,7 +8,7 @@ type ExtracurricularActivity struct {
 	ExAcID            uint      `gorm:"primaryKey;column:ex_ac_id" json:"ex_ac_id"`
 	FormID            uint      `gorm:"column:form_id" json:"form_id"`
 	QualificationType string    `gorm:"column:qualification_type" json:"qualification_type"`
-	DateReceived      time.Time `gorm:"column:date_received" json:"date_received"`
+	DateReceived      time.Time `gorm:"column:date_received;type:date" json:"date_received"`
 	TeamName          string    `gorm:"column:team_name" json:"team_name"`
 	ProjectTitle      string    `gorm:"column:project_title" json:"project_title"`
 	Prize             string    `gorm:"column:prize" json:"prize"`

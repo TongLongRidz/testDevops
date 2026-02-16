@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -27,6 +28,7 @@ type AuthService interface {
 
 	GetUserByID(ctx context.Context, userID uint) (*models.User, error)
 	UpdateUser(ctx context.Context, userID uint, req *authDto.UpdateUserRequest) (*models.User, error)
+	CompleteFirstLogin(ctx context.Context, userID uint, req *authDto.FirstLoginRequest, imagePath string) (*models.User, *models.Student, error)
 }
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
@@ -214,6 +216,9 @@ func (u *authService) UpdateUser(ctx context.Context, userID uint, req *authDto.
 	if req.Firstname != nil {
 		updates["firstname"] = *req.Firstname
 	}
+	if req.Prefix != nil {
+		updates["prefix"] = strings.TrimSpace(*req.Prefix)
+	}
 	if req.Lastname != nil {
 		updates["lastname"] = *req.Lastname
 	}
@@ -238,3 +243,94 @@ func (u *authService) UpdateUser(ctx context.Context, userID uint, req *authDto.
 
 	return u.repo.UpdateUserFields(ctx, userID, updates)
 }
+
+// CompleteFirstLogin ตั้งค่าข้อมูลครั้งแรกสำหรับนักศึกษา
+func (u *authService) CompleteFirstLogin(ctx context.Context, userID uint, req *authDto.FirstLoginRequest, imagePath string) (*models.User, *models.Student, error) {
+	if u.studentRepo == nil {
+		return nil, nil, errors.New("student repository not configured")
+	}
+
+	prefix := strings.TrimSpace(req.Prefix)
+	firstname := strings.TrimSpace(req.Firstname)
+	lastname := strings.TrimSpace(req.Lastname)
+	imagePath = strings.TrimSpace(imagePath)
+	studentNumber := strings.TrimSpace(req.StudentNumber)
+
+	if prefix == "" || firstname == "" || lastname == "" || imagePath == "" || studentNumber == "" {
+		return nil, nil, errors.New("missing required fields")
+	}
+	if req.CampusID <= 0 {
+		return nil, nil, errors.New("invalid campus id")
+	}
+	if req.FacultyID == 0 {
+		return nil, nil, errors.New("invalid faculty id")
+	}
+	if req.DepartmentID == 0 {
+		return nil, nil, errors.New("invalid department id")
+	}
+	if err := validateStudentNumber(studentNumber); err != nil {
+		return nil, nil, err
+	}
+
+	if existing, err := u.studentRepo.GetByStudentNumber(ctx, studentNumber); err == nil && existing != nil && existing.UserID != userID {
+		return nil, nil, errors.New("student_number already in use")
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	updates := map[string]interface{}{
+		"prefix":         prefix,
+		"firstname":      firstname,
+		"lastname":       lastname,
+		"image_path":     imagePath,
+		"campus_id":      req.CampusID,
+		"is_first_login": false,
+		"latest_update":  time.Now(),
+	}
+
+	updatedUser, err := u.repo.UpdateUserFields(ctx, userID, updates)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	student, err := u.studentRepo.GetByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			student = &models.Student{
+				UserID:        userID,
+				StudentNumber: studentNumber,
+				FacultyID:     req.FacultyID,
+				DepartmentID:  req.DepartmentID,
+			}
+			if err := u.studentRepo.Create(ctx, student); err != nil {
+				return updatedUser, nil, err
+			}
+			student, err = u.studentRepo.GetByUserID(ctx, userID)
+			if err != nil {
+				return updatedUser, nil, err
+			}
+		} else {
+			return updatedUser, nil, err
+		}
+	} else {
+		student.StudentNumber = studentNumber
+		student.FacultyID = req.FacultyID
+		student.DepartmentID = req.DepartmentID
+		if err := u.studentRepo.Update(ctx, student); err != nil {
+			return updatedUser, nil, err
+		}
+	}
+
+	return updatedUser, student, nil
+}
+// func validateStudentNumber(studentNumber string) error {
+// 	if len(studentNumber) != 10 {
+// 		return fmt.Errorf("student_number must be exactly 10 digits")
+// 	}
+// 	for _, r := range studentNumber {
+// 		if r < '0' || r > '9' {
+// 			return fmt.Errorf("student_number must be exactly 10 digits")
+// 		}
+// 	}
+// 	return nil
+// }

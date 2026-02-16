@@ -78,6 +78,20 @@ func main() {
 	}
 	fmt.Println("✓ Role seeded successfully")
 
+	// 2.9 Seed Faculty และ Department ลงฐานข้อมูล
+	fmt.Println("Seeding Faculty and Department data...")
+	if err := migration.SeedFacultyAndDepartments(db); err != nil {
+		log.Fatal("Seeding Faculty and Department failed: ", err)
+	}
+	fmt.Println("✓ Faculty and Department seeded successfully")
+
+	// 2.10 Seed AwardType ลงฐานข้อมูล
+	fmt.Println("Seeding AwardType data...")
+	if err := migration.SeedAwardType(db); err != nil {
+		log.Fatal("Seeding AwardType failed: ", err)
+	}
+	fmt.Println("✓ AwardType seeded successfully")
+
 	// 3. ตั้งค่า Fiber App
 	app := fiber.New(fiber.Config{
 		AppName: "Backend JA",

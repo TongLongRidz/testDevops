@@ -126,9 +126,9 @@ func (r *AwardRepository) GetByType(ctx context.Context, typeID int, campusID in
 	case 1:
 		query = query.Preload("Extracurricular")
 	case 2:
-		query = query.Preload("GoodBehavior")
-	case 3:
 		query = query.Preload("Creativity")
+	case 3:
+		query = query.Preload("GoodBehavior")
 	}
 
 	err := query.Order("created_at desc").Find(&list).Error

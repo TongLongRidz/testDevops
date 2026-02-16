@@ -1,7 +1,7 @@
 package studentdto
 
 type CreateStudentRequest struct {
-	StudentNumber string `json:"student_number" binding:"required,min=1,max=20"`
+	StudentNumber string `json:"student_number" binding:"required,len=10,numeric"`
 	FacultyID     uint   `json:"faculty_id" binding:"required"`
 	DepartmentID  uint   `json:"department_id" binding:"required"`
 }

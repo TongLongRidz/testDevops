@@ -42,6 +42,9 @@ func (s *userService) UpdateUserByID(ctx context.Context, userID uint, req *user
 	if req.Firstname != nil {
 		updates["firstname"] = strings.TrimSpace(*req.Firstname)
 	}
+	if req.Prefix != nil {
+		updates["prefix"] = strings.TrimSpace(*req.Prefix)
+	}
 	if req.Lastname != nil {
 		updates["lastname"] = strings.TrimSpace(*req.Lastname)
 	}

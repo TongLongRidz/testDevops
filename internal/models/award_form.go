@@ -25,7 +25,7 @@ type AwardForm struct {
 	PhoneNumber      string    `gorm:"column:phone_number" json:"phone_number"`
 	Address          string    `gorm:"column:address" json:"address"`
 	GPA              float64   `gorm:"column:gpa" json:"gpa"`
-	DateOfBirth      time.Time `gorm:"column:date_of_birth" json:"date_of_birth"`
+	DateOfBirth      time.Time `gorm:"column:date_of_birth;type:date" json:"date_of_birth"`
 	RejectReason     string    `gorm:"column:reject_reason" json:"reject_reason"`
 
 	// Relationship

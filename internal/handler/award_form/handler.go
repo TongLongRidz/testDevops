@@ -111,11 +111,11 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 			req.Extracurricular.DateReceived = t
 		}
 
-	case 2: // Good Behavior
+	case 3: // Good Behavior
 		// หากในอนาคตมีฟิลด์ของ Good Behavior ให้มาเพิ่มที่นี่
 		req.GoodBehavior = &awardformdto.GoodBehaviorRequest{}
 
-	case 3: // Creativity & Innovation
+	case 2: // Creativity & Innovation
 		req.Creativity = &awardformdto.CreativityRequest{
 			TeamName:         c.FormValue("team_name"),
 			ProjectTitle:     c.FormValue("project_title"),

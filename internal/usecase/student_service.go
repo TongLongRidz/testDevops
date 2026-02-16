@@ -5,6 +5,7 @@ import (
 	"backend/internal/models"
 	"backend/internal/repository"
 	"context"
+	"fmt"
 )
 
 type StudentService interface {
@@ -25,11 +26,15 @@ func NewStudentService(repo repository.StudentRepository) StudentService {
 }
 
 func (s *studentService) CreateStudent(ctx context.Context, userID uint, req *studentDTO.CreateStudentRequest) (*models.Student, error) {
+	if err := validateStudentNumber(req.StudentNumber); err != nil {
+		return nil, err
+	}
+
 	student := &models.Student{
-		UserID:       userID,
+		UserID:        userID,
 		StudentNumber: req.StudentNumber,
-		FacultyID:    req.FacultyID,
-		DepartmentID: req.DepartmentID,
+		FacultyID:     req.FacultyID,
+		DepartmentID:  req.DepartmentID,
 	}
 
 	if err := s.repo.Create(ctx, student); err != nil {
@@ -57,6 +62,10 @@ func (s *studentService) UpdateStudent(ctx context.Context, id uint, req *studen
 		return nil, err
 	}
 
+	if err := validateStudentNumber(req.StudentNumber); err != nil {
+		return nil, err
+	}
+
 	student.StudentNumber = req.StudentNumber
 	student.FacultyID = req.FacultyID
 	student.DepartmentID = req.DepartmentID
@@ -70,4 +79,16 @@ func (s *studentService) UpdateStudent(ctx context.Context, id uint, req *studen
 
 func (s *studentService) DeleteStudent(ctx context.Context, id uint) error {
 	return s.repo.Delete(ctx, id)
+}
+
+func validateStudentNumber(studentNumber string) error {
+	if len(studentNumber) != 10 {
+		return fmt.Errorf("student_number must be exactly 10 digits")
+	}
+	for _, r := range studentNumber {
+		if r < '0' || r > '9' {
+			return fmt.Errorf("student_number must be exactly 10 digits")
+		}
+	}
+	return nil
 }

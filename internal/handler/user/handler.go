@@ -32,6 +32,7 @@ func (h *UserHandler) GetUserByID(c *fiber.Ctx) error {
 
 	return c.JSON(userdto.UserResponse{
 		UserID:       user.UserID,
+		Prefix:       user.Prefix,
 		Firstname:    user.Firstname,
 		Lastname:     user.Lastname,
 		Email:        user.Email,
@@ -62,6 +63,7 @@ func (h *UserHandler) GetAllUsersByCampus(c *fiber.Ctx) error {
 	for _, user := range users {
 		responses = append(responses, userdto.UserResponse{
 			UserID:       user.UserID,
+			Prefix:       user.Prefix,
 			Firstname:    user.Firstname,
 			Lastname:     user.Lastname,
 			Email:        user.Email,
@@ -98,6 +100,7 @@ func (h *UserHandler) UpdateUserByID(c *fiber.Ctx) error {
 
 	return c.JSON(userdto.UserResponse{
 		UserID:       updated.UserID,
+		Prefix:       updated.Prefix,
 		Firstname:    updated.Firstname,
 		Lastname:     updated.Lastname,
 		Email:        updated.Email,

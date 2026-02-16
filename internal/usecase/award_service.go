@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type AwardUseCase interface {
@@ -51,6 +52,7 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 	}
 
 	// 3. เตรียม Model ตารางหลัก (Award_Form)
+	now := time.Now()
 	form := models.AwardForm{
 		StudentID:        int(student.StudentID),
 		StudentFirstname: student.User.Firstname,
@@ -64,6 +66,8 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 		Semester:         academicYear.Semester,
 		AwardTypeID:      input.AwardTypeID,
 		FormStatusID:     1, // สถานะเริ่มต้น: รอพิจารณา
+		CreatedAt:        now,
+		LatestUpdate:     now,
 		StudentYear:      input.StudentYear,
 		AdvisorName:      input.AdvisorName,
 		PhoneNumber:      input.PhoneNumber,
@@ -91,9 +95,7 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 			ActivityCategory:  input.Extracurricular.ActivityCategory,
 			CompetitionName:   input.Extracurricular.CompetitionName,
 		}
-	case 2: // Good Behavior (ตัวอย่างถ้ามีข้อมูลต้องกรอกให้ใส่เพิ่มแบบ case 1)
-		detail = &models.GoodBehavior{}
-	case 3: // Creativity & Innovation
+	case 2: // Creativity & Innovation
 		if input.Creativity == nil {
 			return errors.New("creativity detail is required")
 		}
@@ -107,6 +109,8 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 			ActivityCategory: input.Creativity.ActivityCategory,
 			CompetitionName:  input.Creativity.CompetitionName,
 		}
+	case 3: // Good Behavior (ตัวอย่างถ้ามีข้อมูลต้องกรอกให้ใส่เพิ่มแบบ case 1)
+		detail = &models.GoodBehavior{}
 	default:
 		return errors.New("invalid award type id")
 	}
