@@ -2,6 +2,9 @@ package auth
 
 import (
 	"backend/internal/usecase"
+	"os"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -34,9 +37,29 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// เมื่อสำเร็จ อาจจะส่ง User Data กลับไป หรือออก JWT Token
-	return c.JSON(fiber.Map{
-		"message": "Login successful",
-		"user":    user,
+	token, err := h.AuthService.IssueToken(user)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   3600 * 24,
+		HTTPOnly: true,
+		Secure:   false,
+		SameSite: "Lax",
+		Expires:  time.Now().Add(24 * time.Hour),
 	})
+
+	frontendBase := os.Getenv("FRONTEND_BASE_URL")
+	if frontendBase == "" {
+		frontendBase = "http://localhost:3000"
+	}
+	redirectPath := "/student/main/student-nomination-form"
+	if user.IsFirstLogin {
+		redirectPath = "/student/auth/first-login"
+	}
+	return c.Redirect(frontendBase + redirectPath)
 }

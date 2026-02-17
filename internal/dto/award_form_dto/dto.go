@@ -95,7 +95,7 @@ type SearchAwardRequest struct {
 	StudentYear int    `query:"student_year"` // กรองตามชั้นปี
 	Page        int    `query:"page"`         // หน้าปัจจุบัน (default: 1)
 	Limit       int    `query:"limit"`        // จำนวนต่อหน้า (default: 10)
-	Arrangement string `query:"arrangement"` // เรียงลำดับ: asc หรือ desc (default: desc)
+	Arrangement string `query:"arrangement"`  // เรียงลำดับ: asc หรือ desc (default: desc)
 }
 
 type PaginatedAwardResponse struct {
@@ -127,12 +127,11 @@ type UpdateFormStatusRequest struct {
 }
 
 type AwardFormLogResponse struct {
-	LogID      uint      `json:"log_id"`
-	FormID     uint      `json:"form_id"`
-	FieldName  string    `json:"field_name"`
-	OldValue   string    `json:"old_value"`
-	NewValue   string    `json:"new_value"`
-	ChangedBy  *int      `json:"changed_by"`
-	CreatedAt  time.Time `json:"created_at"`
-	LatestEdit time.Time `json:"latest_edit"`
+	LogID     uint      `json:"log_id"`
+	FormID    uint      `json:"form_id"`
+	FieldName string    `json:"field_name"`
+	OldValue  string    `json:"old_value"`
+	NewValue  string    `json:"new_value"`
+	ChangedBy int       `json:"changed_by"`
+	CreatedAt time.Time `json:"created_at"`
 }

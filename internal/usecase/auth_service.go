@@ -23,6 +23,7 @@ import (
 type AuthService interface {
 	GetGoogleLoginURL() string
 	ProcessGoogleLogin(code string) (*models.User, error)
+	IssueToken(user *models.User) (string, error)
 	Register(req *authDto.RegisterRequest) (*models.User, error)
 	AuthenticateAndToken(ctx context.Context, email, password string) (string, *models.User, error)
 
@@ -80,26 +81,66 @@ func (u *authService) ProcessGoogleLogin(code string) (*models.User, error) {
 		return nil, err
 	}
 
-	// --- การ Map ข้อมูลลงใน Struct User (อ้างอิงตาม user.go ล่าสุด) ---
-	user := &models.User{
-		Email:        googleUser.Email,
-		Firstname:    googleUser.GivenName,  // ใช้ Firstname (n ตัวเล็ก) ตามที่คุณกำหนด
-		Lastname:     googleUser.FamilyName, // ใช้ Lastname (n ตัวเล็ก) ตามที่คุณกำหนด
-		ImagePath:    googleUser.Picture,    // ใช้ ImagePath ตามที่คุณกำหนด
-		Provider:     "google",              // ระบุเป็น google เพื่อแยกกับ 'manual'
-		LatestUpdate: time.Now(),            // อัปเดตเวลาล่าสุด
+	now := time.Now()
+
+	existing, err := u.repo.GetUserByEmail(googleUser.Email)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		fmt.Println("--- 5. Repository Error:", err, " ---")
+		return nil, err
 	}
 
-	fmt.Printf("--- 5. กำลังจะส่งไป Repository: %+v ---\n", user)
+	if existing == nil {
+		// --- สร้างผู้ใช้ใหม่ (เหมือน register สำหรับ student) ---
+		user := &models.User{
+			Email:        googleUser.Email,
+			Firstname:    googleUser.GivenName,  // ใช้ Firstname (n ตัวเล็ก) ตามที่คุณกำหนด
+			Lastname:     googleUser.FamilyName, // ใช้ Lastname (n ตัวเล็ก) ตามที่คุณกำหนด
+			ImagePath:    googleUser.Picture,    // ใช้ ImagePath ตามที่คุณกำหนด
+			Provider:     "google",              // ระบุเป็น google เพื่อแยกกับ 'manual'
+			RoleID:       1,
+			IsFirstLogin: true,
+			CreatedAt:    now,
+			LatestUpdate: now,
+		}
 
-	// บันทึกหรืออัปเดตข้อมูลลง Database
-	if err := u.repo.UpsertUser(user); err != nil {
-		fmt.Println("--- 6. Repository Error:", err, " ---")
+		fmt.Printf("--- 5. กำลังจะส่งไป Repository: %+v ---\n", user)
+
+		if err := u.repo.UpsertUser(user); err != nil {
+			fmt.Println("--- 6. Repository Error:", err, " ---")
+			return nil, err
+		}
+
+		if u.studentRepo != nil {
+			student := &models.Student{
+				UserID:        user.UserID,
+				StudentNumber: "",
+				FacultyID:     0,
+				DepartmentID:  0,
+			}
+			if err := u.studentRepo.Create(context.Background(), student); err != nil {
+				return nil, err
+			}
+		}
+
+		fmt.Println("--- 7. บันทึกสำเร็จ! ---")
+		return user, nil
+	}
+
+	updates := map[string]interface{}{
+		"firstname":     googleUser.GivenName,
+		"lastname":      googleUser.FamilyName,
+		"image_path":    googleUser.Picture,
+		"provider":      "google",
+		"latest_update": now,
+	}
+
+	updatedUser, err := u.repo.UpdateUserFields(context.Background(), existing.UserID, updates)
+	if err != nil {
 		return nil, err
 	}
 
 	fmt.Println("--- 7. บันทึกสำเร็จ! ---")
-	return user, nil
+	return updatedUser, nil
 }
 
 // Register สำหรับ Manual Sign-up (Basic validation, password hash, duplicate check)
@@ -175,7 +216,15 @@ func (u *authService) AuthenticateAndToken(ctx context.Context, email, password 
 		return "", nil, ErrInvalidCredentials
 	}
 
-	// สร้าง JWT
+	signed, err := u.IssueToken(user)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return signed, user, nil
+}
+
+func (u *authService) IssueToken(user *models.User) (string, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		secret = "dev-secret"
@@ -194,10 +243,10 @@ func (u *authService) AuthenticateAndToken(ctx context.Context, email, password 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString([]byte(secret))
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 
-	return signed, user, nil
+	return signed, nil
 }
 
 func (u *authService) GetUserByID(ctx context.Context, userID uint) (*models.User, error) {

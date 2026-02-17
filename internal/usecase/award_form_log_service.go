@@ -29,9 +29,8 @@ func (u *awardFormLogUseCase) CreateLog(ctx context.Context, changedBy uint, req
 		FieldName:  req.FieldName,
 		OldValue:   req.OldValue,
 		NewValue:   req.NewValue,
-		ChangedBy:  &userID,
+		ChangedBy:  userID,
 		CreatedAt:  now,
-		LatestEdit: now,
 	}
 
 	if err := u.repo.Create(ctx, log); err != nil {

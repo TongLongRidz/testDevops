@@ -380,7 +380,6 @@ func (h *AwardHandler) CreateLog(c *fiber.Ctx) error {
 			NewValue:   log.NewValue,
 			ChangedBy:  log.ChangedBy,
 			CreatedAt:  log.CreatedAt,
-			LatestEdit: log.LatestEdit,
 		},
 	})
 }
@@ -412,7 +411,6 @@ func (h *AwardHandler) GetLogsByFormID(c *fiber.Ctx) error {
 			NewValue:   log.NewValue,
 			ChangedBy:  log.ChangedBy,
 			CreatedAt:  log.CreatedAt,
-			LatestEdit: log.LatestEdit,
 		})
 	}
 

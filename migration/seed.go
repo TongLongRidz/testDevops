@@ -65,7 +65,7 @@ func SeedRole(db *gorm.DB) error {
 		{RoleName: "Dean", RoleNameTH: "คณบดี"},
 		{RoleName: "Student Development", RoleNameTH: "กองพัฒนานิสิต"},
 		{RoleName: "Committee", RoleNameTH: "คณะกรรมการ"},
-		{RoleName: "Committee President", RoleNameTH: "ประธานคณะกรรมการ"},
+		{RoleName: "Committee Chairman", RoleNameTH: "ประธานคณะกรรมการ"},
 		{RoleName: "Chancellor", RoleNameTH: "อธิการบดี"},
 	}
 
