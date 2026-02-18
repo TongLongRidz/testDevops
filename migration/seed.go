@@ -67,6 +67,7 @@ func SeedRole(db *gorm.DB) error {
 		{RoleName: "Committee", RoleNameTH: "คณะกรรมการ"},
 		{RoleName: "Committee Chairman", RoleNameTH: "ประธานคณะกรรมการ"},
 		{RoleName: "Chancellor", RoleNameTH: "อธิการบดี"},
+		{RoleName: "Organization", RoleNameTH: "หน่วยงานภายนอก"},
 	}
 
 	// ตรวจสอบว่า Role มีข้อมูลอยู่แล้วหรือไม่
@@ -78,24 +79,6 @@ func SeedRole(db *gorm.DB) error {
 
 	// บันทึก Role ลงฐานข้อมูล
 	return db.CreateInBatches(roles, 100).Error
-}
-
-func SeedAwardType(db *gorm.DB) error {
-	awardTypes := []models.AwardType{
-		{AwardName: "ด้านกิจกรรมเสริมหลักสูตร"},
-		{AwardName: "ด้านความคิดสร้างสรรค์และนวัตกรรม"},
-		{AwardName: "ด้านความประพฤติดี"},
-	}
-
-	// ตรวจสอบว่า AwardType มีข้อมูลอยู่แล้วหรือไม่
-	var count int64
-	db.Model(&models.AwardType{}).Count(&count)
-	if count > 0 {
-		return nil // ข้อมูล AwardType มีอยู่แล้ว ไม่ต้องสร้างใหม่
-	}
-
-	// บันทึก AwardType ลงฐานข้อมูล
-	return db.CreateInBatches(awardTypes, 100).Error
 }
 
 func SeedFacultyAndDepartments(db *gorm.DB) error {

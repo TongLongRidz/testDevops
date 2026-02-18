@@ -34,11 +34,7 @@ func main() {
 		&models.Department{},
 		&models.Student{},
 		&models.StudentDevelopment{},
-		&models.AwardType{},
 		&models.AwardForm{},
-		&models.ExtracurricularActivity{},
-		&models.GoodBehavior{},
-		&models.CreativityInnovation{},
 		&models.AwardFileDirectory{},
 		&models.FormStatus{},
 		&models.Committee{},
@@ -84,13 +80,6 @@ func main() {
 		log.Fatal("Seeding Faculty and Department failed: ", err)
 	}
 	fmt.Println("✓ Faculty and Department seeded successfully")
-
-	// 2.10 Seed AwardType ลงฐานข้อมูล
-	fmt.Println("Seeding AwardType data...")
-	if err := migration.SeedAwardType(db); err != nil {
-		log.Fatal("Seeding AwardType failed: ", err)
-	}
-	fmt.Println("✓ AwardType seeded successfully")
 
 	// 3. ตั้งค่า Fiber App
 	app := fiber.New(fiber.Config{

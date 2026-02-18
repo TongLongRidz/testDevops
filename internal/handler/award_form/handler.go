@@ -56,80 +56,40 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 	// 1. รับข้อมูลที่เป็น Text/JSON จาก Form
 	// Debug: ดูค่าที่ได้รับทั้งหมด
 	fmt.Println("=== DEBUG FORM VALUES ===")
-	fmt.Printf("award_type_id: '%s'\n", c.FormValue("award_type_id"))
+	fmt.Printf("award_type: '%s'\n", c.FormValue("award_type"))
 	fmt.Printf("student_year: '%s'\n", c.FormValue("student_year"))
 	fmt.Printf("advisor_name: '%s'\n", c.FormValue("advisor_name"))
 
-	awardTypeIDStr := c.FormValue("award_type_id")
-	if awardTypeIDStr == "" {
+	awardType := c.FormValue("award_type")
+	if awardType == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"status":  "error",
-			"message": "award_type_id is required",
+			"message": "award_type is required",
 		})
 	}
-	awardTypeID, err := strconv.Atoi(awardTypeIDStr)
-	if err != nil || awardTypeID == 0 {
-		fmt.Printf("❌ Parse error: awardTypeIDStr='%s', awardTypeID=%d, err=%v\n", awardTypeIDStr, awardTypeID, err)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"status":  "error",
-			"message": fmt.Sprintf("award_type_id must be valid (1, 2, or 3), got: '%s'", awardTypeIDStr),
-		})
-	}
-	req.AwardTypeID = awardTypeID
-
-	// ตรวจสอบ duplicate จะทำใน usecase หลังจากดึงข้อมูล student และ academic year แล้ว
-	// (ย้ายไป usecase เพราะต้องรู้ student_id และ academic_year ก่อน)
+	req.AwardType = awardType
 
 	// ดึงข้อมูลทั่วไป (ที่ไม่ได้มาจาก token)
 	studentYear, _ := strconv.Atoi(c.FormValue("student_year"))
 	req.StudentYear = studentYear
 	req.AdvisorName = c.FormValue("advisor_name")
-	req.PhoneNumber = c.FormValue("phone_number")
-	req.Address = c.FormValue("address")
+	req.StudentPhoneNumber = c.FormValue("student_phone_number")
+	req.StudentAddress = c.FormValue("student_address")
 	gpa, _ := strconv.ParseFloat(c.FormValue("gpa"), 64)
 	req.GPA = gpa
-	if dobStr := c.FormValue("date_of_birth"); dobStr != "" {
+	if dobStr := c.FormValue("student_date_of_birth"); dobStr != "" {
 		dob, _ := time.Parse("2006-01-02", dobStr)
-		req.DateOfBirth = dob
+		req.StudentDateOfBirth = dob
 	}
 
-	// ตรวจสอบประเภทรางวัลเพื่อดึงข้อมูลรายละเอียด
-	switch req.AwardTypeID {
-	case 1: // Extracurricular Activity
-		req.Extracurricular = &awardformdto.ExtracurricularRequest{
-			QualificationType: c.FormValue("qualification_type"),
-			TeamName:          c.FormValue("team_name"),
-			ProjectTitle:      c.FormValue("project_title"),
-			Prize:             c.FormValue("prize"),
-			OrganizedBy:       c.FormValue("organized_by"),
-			CompetitionLevel:  c.FormValue("competition_level"),
-			ActivityCategory:  c.FormValue("activity_category"),
-			CompetitionName:   c.FormValue("competition_name"),
-		}
-		if dateStr := c.FormValue("date_received"); dateStr != "" {
-			t, _ := time.Parse("2006-01-02", dateStr) // จัด Layout เฉยๆ
-			req.Extracurricular.DateReceived = t
-		}
+	// Organization Information
+	req.OrgName = c.FormValue("org_name")
+	req.OrgType = c.FormValue("org_type")
+	req.OrgLocation = c.FormValue("org_location")
+	req.OrgPhoneNumber = c.FormValue("org_phone_number")
 
-	case 3: // Good Behavior
-		// หากในอนาคตมีฟิลด์ของ Good Behavior ให้มาเพิ่มที่นี่
-		req.GoodBehavior = &awardformdto.GoodBehaviorRequest{}
-
-	case 2: // Creativity & Innovation
-		req.Creativity = &awardformdto.CreativityRequest{
-			TeamName:         c.FormValue("team_name"),
-			ProjectTitle:     c.FormValue("project_title"),
-			Prize:            c.FormValue("prize"),
-			OrganizedBy:      c.FormValue("organized_by"),
-			CompetitionLevel: c.FormValue("competition_level"),
-			ActivityCategory: c.FormValue("activity_category"),
-			CompetitionName:  c.FormValue("competition_name"),
-		}
-		if dateStr := c.FormValue("date_received"); dateStr != "" {
-			t, _ := time.Parse("2006-01-02", dateStr)
-			req.Creativity.DateReceived = t
-		}
-	}
+	// Form Detail
+	req.FormDetail = c.FormValue("form_detail")
 
 	// จัดการกับไฟล์แนบ (ถ้ามี)
 	var awardFiles []models.AwardFileDirectory
@@ -264,6 +224,7 @@ func (h *AwardHandler) GetByKeyword(c *fiber.Ctx) error {
 		req.Keyword,
 		req.Date,
 		req.StudentYear,
+		req.AwardType,
 		req.Page,
 		req.Limit,
 		req.Arrangement,
@@ -373,13 +334,13 @@ func (h *AwardHandler) CreateLog(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"status": "success",
 		"data": awardformdto.AwardFormLogResponse{
-			LogID:      log.LogID,
-			FormID:     log.FormID,
-			FieldName:  log.FieldName,
-			OldValue:   log.OldValue,
-			NewValue:   log.NewValue,
-			ChangedBy:  log.ChangedBy,
-			CreatedAt:  log.CreatedAt,
+			LogID:     log.LogID,
+			FormID:    log.FormID,
+			FieldName: log.FieldName,
+			OldValue:  log.OldValue,
+			NewValue:  log.NewValue,
+			ChangedBy: log.ChangedBy,
+			CreatedAt: log.CreatedAt,
 		},
 	})
 }
@@ -404,13 +365,13 @@ func (h *AwardHandler) GetLogsByFormID(c *fiber.Ctx) error {
 	response := make([]awardformdto.AwardFormLogResponse, 0, len(logs))
 	for _, log := range logs {
 		response = append(response, awardformdto.AwardFormLogResponse{
-			LogID:      log.LogID,
-			FormID:     log.FormID,
-			FieldName:  log.FieldName,
-			OldValue:   log.OldValue,
-			NewValue:   log.NewValue,
-			ChangedBy:  log.ChangedBy,
-			CreatedAt:  log.CreatedAt,
+			LogID:     log.LogID,
+			FormID:    log.FormID,
+			FieldName: log.FieldName,
+			OldValue:  log.OldValue,
+			NewValue:  log.NewValue,
+			ChangedBy: log.ChangedBy,
+			CreatedAt: log.CreatedAt,
 		})
 	}
 
@@ -451,14 +412,14 @@ func (h *AwardHandler) UpdateAwardType(c *fiber.Ctx) error {
 			"message": "Invalid request body",
 		})
 	}
-	if req.AwardTypeID <= 0 {
+	if req.AwardType == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"status":  "error",
-			"message": "award_type_id must be greater than 0",
+			"message": "award_type is required",
 		})
 	}
 
-	if err := h.useCase.UpdateAwardType(c.UserContext(), uint(formID), req.AwardTypeID, user.UserID); err != nil {
+	if err := h.useCase.UpdateAwardType(c.UserContext(), uint(formID), req.AwardType, user.UserID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status":  "error",
 			"message": err.Error(),
@@ -467,7 +428,7 @@ func (h *AwardHandler) UpdateAwardType(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"status":  "success",
-		"message": "award_type_id updated",
+		"message": "award_type updated",
 	})
 }
 
@@ -502,10 +463,10 @@ func (h *AwardHandler) UpdateFormStatus(c *fiber.Ctx) error {
 			"message": "Invalid request body",
 		})
 	}
-	if req.FormStatusID <= 0 {
+	if req.FormStatusID == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"status":  "error",
-			"message": "form_status_id must be greater than 0",
+			"message": "form_status is required",
 		})
 	}
 
@@ -518,6 +479,6 @@ func (h *AwardHandler) UpdateFormStatus(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"status":  "success",
-		"message": "form_status_id updated",
+		"message": "form_status updated",
 	})
 }

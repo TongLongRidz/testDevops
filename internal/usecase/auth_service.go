@@ -37,6 +37,7 @@ var ErrInvalidCredentials = errors.New("invalid credentials")
 type authService struct {
 	repo        repository.UserRepository
 	studentRepo repository.StudentRepository
+	orgRepo     repository.OrganizationRepository
 	googleCfg   *config.GoogleOAuthConfig
 }
 
@@ -46,6 +47,10 @@ func NewAuthUsecase(repo repository.UserRepository, cfg *config.GoogleOAuthConfi
 
 func NewAuthUseWithStudent(repo repository.UserRepository, studentRepo repository.StudentRepository, cfg *config.GoogleOAuthConfig) AuthService {
 	return &authService{repo: repo, studentRepo: studentRepo, googleCfg: cfg}
+}
+
+func NewAuthUsecaseWithRepos(repo repository.UserRepository, studentRepo repository.StudentRepository, orgRepo repository.OrganizationRepository, cfg *config.GoogleOAuthConfig) AuthService {
+	return &authService{repo: repo, studentRepo: studentRepo, orgRepo: orgRepo, googleCfg: cfg}
 }
 
 func (u *authService) GetGoogleLoginURL() string {
@@ -127,11 +132,21 @@ func (u *authService) ProcessGoogleLogin(code string) (*models.User, error) {
 	}
 
 	updates := map[string]interface{}{
-		"firstname":     googleUser.GivenName,
-		"lastname":      googleUser.FamilyName,
-		"image_path":    googleUser.Picture,
-		"provider":      "google",
 		"latest_update": now,
+	}
+
+	// Only set OAuth profile fields when they are empty to avoid overwriting manual data.
+	if strings.TrimSpace(existing.Firstname) == "" {
+		updates["firstname"] = googleUser.GivenName
+	}
+	if strings.TrimSpace(existing.Lastname) == "" {
+		updates["lastname"] = googleUser.FamilyName
+	}
+	if strings.TrimSpace(existing.ImagePath) == "" {
+		updates["image_path"] = googleUser.Picture
+	}
+	if strings.TrimSpace(existing.Provider) == "" {
+		updates["provider"] = "google"
 	}
 
 	updatedUser, err := u.repo.UpdateUserFields(context.Background(), existing.UserID, updates)
@@ -293,84 +308,158 @@ func (u *authService) UpdateUser(ctx context.Context, userID uint, req *authDto.
 	return u.repo.UpdateUserFields(ctx, userID, updates)
 }
 
-// CompleteFirstLogin ตั้งค่าข้อมูลครั้งแรกสำหรับนักศึกษา
+// CompleteFirstLogin ตั้งค่าข้อมูลครั้งแรกสำหรับนักศึกษา/องค์กร
 func (u *authService) CompleteFirstLogin(ctx context.Context, userID uint, req *authDto.FirstLoginRequest, imagePath string) (*models.User, *models.Student, error) {
-	if u.studentRepo == nil {
-		return nil, nil, errors.New("student repository not configured")
+	// ดึงข้อมูล User เพื่อตรวจสอบ RoleID
+	user, err := u.repo.GetUserByID(userID)
+	if err != nil {
+		return nil, nil, errors.New("user not found")
 	}
 
 	prefix := strings.TrimSpace(req.Prefix)
 	firstname := strings.TrimSpace(req.Firstname)
 	lastname := strings.TrimSpace(req.Lastname)
 	imagePath = strings.TrimSpace(imagePath)
-	studentNumber := strings.TrimSpace(req.StudentNumber)
 
-	if prefix == "" || firstname == "" || lastname == "" || imagePath == "" || studentNumber == "" {
-		return nil, nil, errors.New("missing required fields")
+	// Validate common fields
+	if prefix == "" || firstname == "" || lastname == "" {
+		return nil, nil, errors.New("missing required fields: prefix, firstname, lastname")
 	}
 	if req.CampusID <= 0 {
 		return nil, nil, errors.New("invalid campus id")
 	}
-	if req.FacultyID == 0 {
-		return nil, nil, errors.New("invalid faculty id")
-	}
-	if req.DepartmentID == 0 {
-		return nil, nil, errors.New("invalid department id")
-	}
-	if err := validateStudentNumber(studentNumber); err != nil {
-		return nil, nil, err
-	}
 
-	if existing, err := u.studentRepo.GetByStudentNumber(ctx, studentNumber); err == nil && existing != nil && existing.UserID != userID {
-		return nil, nil, errors.New("student_number already in use")
-	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil, err
-	}
-
+	// ตั้งค่า common updates
 	updates := map[string]interface{}{
 		"prefix":         prefix,
 		"firstname":      firstname,
 		"lastname":       lastname,
-		"image_path":     imagePath,
 		"campus_id":      req.CampusID,
 		"is_first_login": false,
 		"latest_update":  time.Now(),
 	}
 
-	updatedUser, err := u.repo.UpdateUserFields(ctx, userID, updates)
-	if err != nil {
-		return nil, nil, err
+	// เพิ่ม image_path ถ้ามี
+	if imagePath != "" {
+		updates["image_path"] = imagePath
 	}
 
-	student, err := u.studentRepo.GetByUserID(ctx, userID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			student = &models.Student{
-				UserID:        userID,
-				StudentNumber: studentNumber,
-				FacultyID:     req.FacultyID,
-				DepartmentID:  req.DepartmentID,
-			}
-			if err := u.studentRepo.Create(ctx, student); err != nil {
-				return updatedUser, nil, err
-			}
-			student, err = u.studentRepo.GetByUserID(ctx, userID)
-			if err != nil {
+	// Handle ตาม RoleID
+	switch user.RoleID {
+	case 1: // Student
+		if u.studentRepo == nil {
+			return nil, nil, errors.New("student repository not configured")
+		}
+
+		studentNumber := strings.TrimSpace(req.StudentNumber)
+		if studentNumber == "" {
+			return nil, nil, errors.New("student_number is required for student")
+		}
+		if req.FacultyID == 0 {
+			return nil, nil, errors.New("faculty_id is required for student")
+		}
+		if req.DepartmentID == 0 {
+			return nil, nil, errors.New("department_id is required for student")
+		}
+		if imagePath == "" {
+			return nil, nil, errors.New("profile image is required for student")
+		}
+		if err := validateStudentNumber(studentNumber); err != nil {
+			return nil, nil, err
+		}
+
+		// ตรวจสอบว่า student_number ซ้ำหรือไม่
+		if existing, err := u.studentRepo.GetByStudentNumber(ctx, studentNumber); err == nil && existing != nil && existing.UserID != userID {
+			return nil, nil, errors.New("student_number already in use")
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, err
+		}
+
+		// Update User
+		updatedUser, err := u.repo.UpdateUserFields(ctx, userID, updates)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Create or Update Student
+		student, err := u.studentRepo.GetByUserID(ctx, userID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// สร้าง Student ใหม่
+				student = &models.Student{
+					UserID:        userID,
+					StudentNumber: studentNumber,
+					FacultyID:     req.FacultyID,
+					DepartmentID:  req.DepartmentID,
+				}
+				if err := u.studentRepo.Create(ctx, student); err != nil {
+					return updatedUser, nil, err
+				}
+			} else {
 				return updatedUser, nil, err
 			}
 		} else {
-			return updatedUser, nil, err
+			// Update Student
+			student.StudentNumber = studentNumber
+			student.FacultyID = req.FacultyID
+			student.DepartmentID = req.DepartmentID
+			if err := u.studentRepo.Update(ctx, student); err != nil {
+				return updatedUser, nil, err
+			}
 		}
-	} else {
-		student.StudentNumber = studentNumber
-		student.FacultyID = req.FacultyID
-		student.DepartmentID = req.DepartmentID
-		if err := u.studentRepo.Update(ctx, student); err != nil {
-			return updatedUser, nil, err
-		}
-	}
 
-	return updatedUser, student, nil
+		return updatedUser, student, nil
+
+	case 9: // Organization
+		if u.orgRepo == nil {
+			return nil, nil, errors.New("organization repository not configured")
+		}
+
+		orgName := strings.TrimSpace(req.OrganizationName)
+		if orgName == "" {
+			return nil, nil, errors.New("organization_name is required for organization")
+		}
+
+		// Update User
+		updatedUser, err := u.repo.UpdateUserFields(ctx, userID, updates)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Create or Update Organization
+		org, err := u.orgRepo.GetByUserID(ctx, userID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// สร้าง Organization ใหม่
+				org = &models.Organization{
+					UserID:                  userID,
+					OrganizationName:        orgName,
+					OrganizationType:        strings.TrimSpace(req.OrganizationType),
+					OrganizationLocation:    strings.TrimSpace(req.OrganizationLocation),
+					OrganizationPhoneNumber: strings.TrimSpace(req.OrganizationPhone),
+				}
+				if err := u.orgRepo.Create(ctx, org); err != nil {
+					return updatedUser, nil, err
+				}
+			} else {
+				return updatedUser, nil, err
+			}
+		} else {
+			// Update Organization
+			org.OrganizationName = orgName
+			org.OrganizationType = strings.TrimSpace(req.OrganizationType)
+			org.OrganizationLocation = strings.TrimSpace(req.OrganizationLocation)
+			org.OrganizationPhoneNumber = strings.TrimSpace(req.OrganizationPhone)
+			if err := u.orgRepo.Update(ctx, org); err != nil {
+				return updatedUser, nil, err
+			}
+		}
+
+		return updatedUser, nil, nil
+
+	default:
+		return nil, nil, errors.New("invalid role_id for first login")
+	}
 }
 // func validateStudentNumber(studentNumber string) error {
 // 	if len(studentNumber) != 10 {

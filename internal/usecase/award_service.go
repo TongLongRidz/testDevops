@@ -14,110 +14,91 @@ import (
 type AwardUseCase interface {
 	// ปรับปรุง: รับ userID เพื่อดึงข้อมูล student และ files
 	SubmitAward(ctx context.Context, userID uint, input awardformdto.SubmitAwardRequest, files []models.AwardFileDirectory) error
-	GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int, arrangement string) (*awardformdto.PaginatedAwardResponse, error)
+	GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, awardType string, page int, limit int, arrangement string) (*awardformdto.PaginatedAwardResponse, error)
+	GetAwardsByUserID(ctx context.Context, userID uint) ([]awardformdto.AwardFormResponse, error)
 	GetAwardsByStudentID(ctx context.Context, studentID int) ([]awardformdto.AwardFormResponse, error)
 	GetByFormID(ctx context.Context, formID int) (*awardformdto.AwardFormResponse, error)
-	IsDuplicate(studentID int, year int, semester int) (bool, error)
-	UpdateAwardType(ctx context.Context, formID uint, awardTypeID int, changedBy uint) error
-	UpdateFormStatus(ctx context.Context, formID uint, formStatusID int, changedBy uint) error
+	IsDuplicate(userID uint, year int, semester int) (bool, error)
+	UpdateAwardType(ctx context.Context, formID uint, awardType string, changedBy uint) error
+	UpdateFormStatus(ctx context.Context, formID uint, formStatus int, changedBy uint) error
 }
 
 type awardUseCase struct {
 	repo                *repository.AwardRepository
 	logUseCase          AwardFormLogUseCase
 	studentService      StudentService
+	organizationService OrganizationService
 	academicYearService AcademicYearService
 }
 
-func NewAwardUseCase(r *repository.AwardRepository, ss StudentService, ays AcademicYearService, logUC AwardFormLogUseCase) AwardUseCase {
+func NewAwardUseCase(r *repository.AwardRepository, ss StudentService, os OrganizationService, ays AcademicYearService, logUC AwardFormLogUseCase) AwardUseCase {
 	return &awardUseCase{
 		repo:                r,
 		logUseCase:          logUC,
 		studentService:      ss,
+		organizationService: os,
 		academicYearService: ays,
 	}
 }
 
 func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input awardformdto.SubmitAwardRequest, files []models.AwardFileDirectory) error {
-	// 1. ดึงข้อมูล Student จาก User ID
-	student, err := u.studentService.GetStudentByUserID(ctx, userID)
-	if err != nil || student == nil {
-		return errors.New("student profile not found")
-	}
-
-	// 2. ดึงข้อมูล Academic Year ที่เปิดรับสมัคร (isCurrent = true และ isOpenRegistration = true)
+	// 1. ดึงข้อมูล Academic Year ที่เปิดรับสมัคร
 	academicYear, err := u.academicYearService.GetLatestAbleRegister(ctx)
 	if err != nil || academicYear == nil {
 		return errors.New("no open registration period found")
 	}
 
-	// 3. เตรียม Model ตารางหลัก (Award_Form)
+	// 2. เตรียม Model ตารางหลัก (Award_Form)
 	now := time.Now()
 	form := models.AwardForm{
-		StudentID:        int(student.StudentID),
-		StudentFirstname: student.User.Firstname,
-		StudentLastname:  student.User.Lastname,
-		Email:            student.User.Email,
-		StudentNumber:    student.StudentNumber,
-		FacultyID:        int(student.FacultyID),
-		DepartmentID:     int(student.DepartmentID),
-		CampusID:         student.User.CampusID,
-		AcademicYear:     academicYear.Year,
-		Semester:         academicYear.Semester,
-		AwardTypeID:      input.AwardTypeID,
-		FormStatusID:     1, // สถานะเริ่มต้น: รอพิจารณา
-		CreatedAt:        now,
-		LatestUpdate:     now,
-		StudentYear:      input.StudentYear,
-		AdvisorName:      input.AdvisorName,
-		PhoneNumber:      input.PhoneNumber,
-		Address:          input.Address,
-		GPA:              input.GPA,
-		DateOfBirth:      input.DateOfBirth,
+		UserID:             userID,
+		AcademicYear:       academicYear.Year,
+		Semester:           academicYear.Semester,
+		AwardType:          input.AwardType,
+		FormStatusID:       1,
+		CreatedAt:          now,
+		LatestUpdate:       now,
+		StudentYear:        input.StudentYear,
+		AdvisorName:        input.AdvisorName,
+		StudentPhoneNumber: input.StudentPhoneNumber,
+		StudentAddress:     input.StudentAddress,
+		GPA:                input.GPA,
+		StudentDateOfBirth: input.StudentDateOfBirth,
+		OrgName:            input.OrgName,
+		OrgType:            input.OrgType,
+		OrgLocation:        input.OrgLocation,
+		OrgPhoneNumber:     input.OrgPhoneNumber,
+		FormDetail:         input.FormDetail,
 	}
 
-	var detail interface{}
+	// 3. เช็ค Role และดึงข้อมูลตาม Role
+	// ต้องดึง User เพื่อเช็ค RoleID
+	student, studentErr := u.studentService.GetStudentByUserID(ctx, userID)
+	org, orgErr := u.organizationService.GetByUserID(ctx, userID)
 
-	// 4. ตรวจสอบประเภทรางวัลตาม ID เพื่อเลือก Model ตารางลูก
-	switch input.AwardTypeID {
-	case 1: // Extracurricular Activity
-		if input.Extracurricular == nil {
-			return errors.New("extracurricular detail is required")
-		}
-		detail = &models.ExtracurricularActivity{
-			QualificationType: input.Extracurricular.QualificationType,
-			DateReceived:      input.Extracurricular.DateReceived,
-			TeamName:          input.Extracurricular.TeamName,
-			ProjectTitle:      input.Extracurricular.ProjectTitle,
-			Prize:             input.Extracurricular.Prize,
-			OrganizedBy:       input.Extracurricular.OrganizedBy,
-			CompetitionLevel:  input.Extracurricular.CompetitionLevel,
-			ActivityCategory:  input.Extracurricular.ActivityCategory,
-			CompetitionName:   input.Extracurricular.CompetitionName,
-		}
-	case 2: // Creativity & Innovation
-		if input.Creativity == nil {
-			return errors.New("creativity detail is required")
-		}
-		detail = &models.CreativityInnovation{
-			DateReceived:     input.Creativity.DateReceived,
-			TeamName:         input.Creativity.TeamName,
-			ProjectTitle:     input.Creativity.ProjectTitle,
-			Prize:            input.Creativity.Prize,
-			OrganizedBy:      input.Creativity.OrganizedBy,
-			CompetitionLevel: input.Creativity.CompetitionLevel,
-			ActivityCategory: input.Creativity.ActivityCategory,
-			CompetitionName:  input.Creativity.CompetitionName,
-		}
-	case 3: // Good Behavior (ตัวอย่างถ้ามีข้อมูลต้องกรอกให้ใส่เพิ่มแบบ case 1)
-		detail = &models.GoodBehavior{}
-	default:
-		return errors.New("invalid award type id")
+	if studentErr == nil && student != nil {
+		// Role: Student (RoleID = 1)
+		form.StudentFirstname = student.User.Firstname
+		form.StudentLastname = student.User.Lastname
+		form.StudentEmail = student.User.Email
+		form.StudentNumber = student.StudentNumber
+		form.FacultyID = int(student.FacultyID)
+		form.DepartmentID = int(student.DepartmentID)
+		form.CampusID = student.User.CampusID
+	} else if orgErr == nil && org != nil {
+		// Role: Organization (RoleID = 9)
+		form.OrgName = org.OrganizationName
+		form.OrgType = org.OrganizationType
+		form.OrgLocation = org.OrganizationLocation
+		form.OrgPhoneNumber = org.OrganizationPhoneNumber
+		// CampusID ดึงจาก User
+		form.CampusID = org.User.CampusID
+	} else {
+		return errors.New("user must be either a student or an organization")
 	}
 
-	// 5. เรียก Repository โดยส่งไฟล์ (Slice) เข้าไปด้วย
-	// ถ้าไม่มีไฟล์ Slice นี้จะเป็นค่าว่าง ซึ่ง Repo ของเราจัดการได้
-	return u.repo.CreateWithTransaction(ctx, &form, detail, files)
+	// เรียก Repository โดยส่งไฟล์ (Slice) เข้าไปด้วย
+	return u.repo.CreateWithTransaction(ctx, &form, files)
 }
 
 func mapToAwardResponse(item models.AwardForm) awardformdto.AwardFormResponse {
@@ -134,42 +115,40 @@ func mapToAwardResponse(item models.AwardForm) awardformdto.AwardFormResponse {
 	}
 
 	res := awardformdto.AwardFormResponse{
-		FormID:           item.FormID,
-		StudentID:        item.StudentID,
-		StudentFirstname: item.StudentFirstname,
-		StudentLastname:  item.StudentLastname,
-		Email:            item.Email,
-		StudentNumber:    item.StudentNumber,
-		FacultyID:        item.FacultyID,
-		DepartmentID:     item.DepartmentID,
-		CampusID:         item.CampusID,
-		AcademicYear:     item.AcademicYear,
-		Semester:         item.Semester,
-		FormStatusID:     item.FormStatusID,
-		AwardTypeID:      item.AwardTypeID,
-		AwardTypeName:    item.AwardType.AwardName,
-		CreatedAt:        item.CreatedAt,
-		LatestUpdate:     item.LatestUpdate,
-		StudentYear:      item.StudentYear,
-		AdvisorName:      item.AdvisorName,
-		PhoneNumber:      item.PhoneNumber,
-		Address:          item.Address,
-		GPA:              item.GPA,
-		DateOfBirth:      item.DateOfBirth,
-		Files:            fileResponses, // ใส่ไฟล์ลงไปที่นี่
+		FormID:             item.FormID,
+		UserID:             item.UserID,
+		StudentFirstname:   item.StudentFirstname,
+		StudentLastname:    item.StudentLastname,
+		StudentEmail:       item.StudentEmail,
+		StudentNumber:      item.StudentNumber,
+		FacultyID:          item.FacultyID,
+		DepartmentID:       item.DepartmentID,
+		CampusID:           item.CampusID,
+		AcademicYear:       item.AcademicYear,
+		Semester:           item.Semester,
+		FormStatusID:       item.FormStatusID,
+		AwardType:          item.AwardType,
+		CreatedAt:          item.CreatedAt,
+		LatestUpdate:       item.LatestUpdate,
+		StudentYear:        item.StudentYear,
+		AdvisorName:        item.AdvisorName,
+		StudentPhoneNumber: item.StudentPhoneNumber,
+		StudentAddress:     item.StudentAddress,
+		GPA:                item.GPA,
+		StudentDateOfBirth: item.StudentDateOfBirth,
+		OrgName:            item.OrgName,
+		OrgType:            item.OrgType,
+		OrgLocation:        item.OrgLocation,
+		OrgPhoneNumber:     item.OrgPhoneNumber,
+		FormDetail:         item.FormDetail,
+		RejectReason:       item.RejectReason,
+		Files:              fileResponses,
 	}
 
-	if item.Extracurricular != nil {
-		res.Detail = item.Extracurricular
-	} else if item.GoodBehavior != nil {
-		res.Detail = item.GoodBehavior
-	} else if item.Creativity != nil {
-		res.Detail = item.Creativity
-	}
 	return res
 }
 
-func (u *awardUseCase) GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, page int, limit int, arrangement string) (*awardformdto.PaginatedAwardResponse, error) {
+func (u *awardUseCase) GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, awardType string, page int, limit int, arrangement string) (*awardformdto.PaginatedAwardResponse, error) {
 	// ตั้งค่า default สำหรับ pagination
 	if page < 1 {
 		page = 1
@@ -182,7 +161,7 @@ func (u *awardUseCase) GetByKeyword(ctx context.Context, campusID int, keyword s
 		order = "asc"
 	}
 
-	results, total, err := u.repo.GetByKeyword(ctx, campusID, keyword, date, studentYear, page, limit, order)
+	results, total, err := u.repo.GetByKeyword(ctx, campusID, keyword, date, studentYear, awardType, page, limit, order)
 	if err != nil {
 		return nil, err
 	}
@@ -235,11 +214,23 @@ func (u *awardUseCase) GetByFormID(ctx context.Context, formID int) (*awardformd
 	return &response, nil
 }
 
-func (u *awardUseCase) IsDuplicate(studentID int, year int, semester int) (bool, error) {
-	return u.repo.CheckDuplicate(studentID, year, semester)
+func (u *awardUseCase) GetAwardsByUserID(ctx context.Context, userID uint) ([]awardformdto.AwardFormResponse, error) {
+	results, err := u.repo.GetByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var response []awardformdto.AwardFormResponse
+	for _, item := range results {
+		response = append(response, mapToAwardResponse(item))
+	}
+	return response, nil
 }
 
-func (u *awardUseCase) UpdateAwardType(ctx context.Context, formID uint, awardTypeID int, changedBy uint) error {
+func (u *awardUseCase) IsDuplicate(userID uint, year int, semester int) (bool, error) {
+	return u.repo.CheckDuplicate(userID, year, semester)
+}
+
+func (u *awardUseCase) UpdateAwardType(ctx context.Context, formID uint, awardType string, changedBy uint) error {
 	form, err := u.repo.GetByFormID(ctx, int(formID))
 	if err != nil {
 		return err
@@ -247,28 +238,28 @@ func (u *awardUseCase) UpdateAwardType(ctx context.Context, formID uint, awardTy
 	if form == nil {
 		return errors.New("form not found")
 	}
-	if awardTypeID <= 0 {
-		return errors.New("award_type_id must be greater than 0")
+	if awardType == "" {
+		return errors.New("award_type is required")
 	}
-	if form.AwardTypeID == awardTypeID {
+	if form.AwardType == awardType {
 		return nil
 	}
 
-	oldValue := form.AwardTypeID
-	if err := u.repo.UpdateAwardType(ctx, formID, awardTypeID); err != nil {
+	oldValue := form.AwardType
+	if err := u.repo.UpdateAwardType(ctx, formID, awardType); err != nil {
 		return err
 	}
 
 	_, err = u.logUseCase.CreateLog(ctx, changedBy, &awardformdto.CreateAwardFormLogRequest{
 		FormID:    formID,
-		FieldName: "award_type_id",
-		OldValue:  strconv.Itoa(oldValue),
-		NewValue:  strconv.Itoa(awardTypeID),
+		FieldName: "award_type",
+		OldValue:  oldValue,
+		NewValue:  awardType,
 	})
 	return err
 }
 
-func (u *awardUseCase) UpdateFormStatus(ctx context.Context, formID uint, formStatusID int, changedBy uint) error {
+func (u *awardUseCase) UpdateFormStatus(ctx context.Context, formID uint, formStatus int, changedBy uint) error {
 	form, err := u.repo.GetByFormID(ctx, int(formID))
 	if err != nil {
 		return err
@@ -276,23 +267,23 @@ func (u *awardUseCase) UpdateFormStatus(ctx context.Context, formID uint, formSt
 	if form == nil {
 		return errors.New("form not found")
 	}
-	if formStatusID <= 0 {
-		return errors.New("form_status_id must be greater than 0")
+	if formStatus == 0 {
+		return errors.New("form_status is required")
 	}
-	if form.FormStatusID == formStatusID {
+	if form.FormStatusID == formStatus {
 		return nil
 	}
 
 	oldValue := form.FormStatusID
-	if err := u.repo.UpdateFormStatus(ctx, formID, formStatusID); err != nil {
+	if err := u.repo.UpdateFormStatus(ctx, formID, formStatus); err != nil {
 		return err
 	}
 
 	_, err = u.logUseCase.CreateLog(ctx, changedBy, &awardformdto.CreateAwardFormLogRequest{
 		FormID:    formID,
-		FieldName: "form_status_id",
+		FieldName: "form_status",
 		OldValue:  strconv.Itoa(oldValue),
-		NewValue:  strconv.Itoa(formStatusID),
+		NewValue:  strconv.Itoa(formStatus),
 	})
 	return err
 }

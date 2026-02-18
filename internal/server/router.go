@@ -7,7 +7,6 @@ import (
 	"backend/internal/handler/campus"
 	"backend/internal/handler/department"
 	"backend/internal/handler/faculty"
-	awardtype "backend/internal/handler/award_type"
 	formstatus "backend/internal/handler/form_status"
 	"backend/internal/handler/role"
 	"backend/internal/handler/student"
@@ -40,25 +39,25 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	facultyRepo := repository.NewFacultyRepository(db)
 	departmentRepo := repository.NewDepartmentRepository(db)
 	studentRepo := repository.NewStudentRepository(db)
+	organizationRepo := repository.NewOrganizationRepository(db)
 	campusRepo := repository.NewCampusRepository(db)
 	roleRepo := repository.NewRoleRepository(db)
 	formStatusRepo := repository.NewFormStatusRepository(db)
-	awardTypeRepo := repository.NewAwardTypeRepository(db)
 
 	// --- 3. Usecase Layer (Business Logic) ---
 	// ส่ง Repository และ Config เข้าไปใน Usecase
-	authService := usecase.NewAuthUseWithStudent(userRepo, studentRepo, googleConfig)
+	authService := usecase.NewAuthUsecaseWithRepos(userRepo, studentRepo, organizationRepo, googleConfig)
 	academicYearService := usecase.NewAcademicYearService(academicYearRepo)
 	studentService := usecase.NewStudentService(studentRepo)
+	organizationService := usecase.NewOrganizationService(organizationRepo)
 	awardFormLogService := usecase.NewAwardFormLogUseCase(awardFormLogRepo)
-	awardService := usecase.NewAwardUseCase(awardRepo, studentService, academicYearService, awardFormLogService)
+	awardService := usecase.NewAwardUseCase(awardRepo, studentService, organizationService, academicYearService, awardFormLogService)
 	userService := usecase.NewUserUsecase(userRepo)
 	facultyService := usecase.NewFacultyService(facultyRepo)
 	departmentService := usecase.NewDepartmentService(departmentRepo)
 	campusService := usecase.NewCampusService(campusRepo)
 	roleService := usecase.NewRoleService(roleRepo)
 	formStatusService := usecase.NewFormStatusService(formStatusRepo)
-	awardTypeService := usecase.NewAwardTypeService(awardTypeRepo)
 
 	// --- 4. Handler Layer (Controller) ---
 	// สร้าง Handler ที่จะรับ HTTP Request
@@ -72,7 +71,6 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	campusHandler := campus.NewCampusHandler(campusService)
 	roleHandler := role.NewRoleHandler(roleService)
 	formStatusHandler := formstatus.NewFormStatusHandler(formStatusService)
-	awardTypeHandler := awardtype.NewAwardTypeHandler(awardTypeService)
 
 	// --- 5. Routing Definition ---
 	apiGroup := app.Group("/api")
@@ -153,8 +151,4 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	// --- Form Status Routes ---
 	formStatusGroup := apiGroup.Group("/form-statuses")
 	formStatusGroup.Get("/", formStatusHandler.GetAllFormStatuses)
-
-	// --- Award Type Routes ---
-	awardTypeGroup := apiGroup.Group("/award-types")
-	awardTypeGroup.Get("/", awardTypeHandler.GetAllAwardTypes)
 }

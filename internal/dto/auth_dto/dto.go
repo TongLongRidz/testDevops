@@ -91,13 +91,21 @@ type UpdateUserRequest struct {
 	IsFirstLogin *bool   `json:"is_first_login"`
 }
 
-// FirstLoginRequest ใช้สำหรับตั้งค่าข้อมูลครั้งแรกของนักศึกษา
+// FirstLoginRequest ใช้สำหรับตั้งค่าข้อมูลครั้งแรกของนักศึกษา/องค์กร
 type FirstLoginRequest struct {
-	StudentNumber string `json:"student_number"`
-	Prefix        string `json:"prefix"`
-	Firstname     string `json:"firstname"`
-	Lastname      string `json:"lastname"`
-	CampusID      int    `json:"campus_id"`
-	FacultyID     uint   `json:"faculty_id"`
-	DepartmentID  uint   `json:"department_id"`
+	Prefix    string `json:"prefix"`
+	Firstname string `json:"firstname"`
+	Lastname  string `json:"lastname"`
+	CampusID  int    `json:"campus_id"`
+
+	// Student fields (สำหรับเมล @ku.th)
+	StudentNumber string `json:"student_number,omitempty"`
+	FacultyID     uint   `json:"faculty_id,omitempty"`
+	DepartmentID  uint   `json:"department_id,omitempty"`
+
+	// Organization fields (สำหรับเมลอื่นๆ)
+	OrganizationName     string `json:"organization_name,omitempty"`
+	OrganizationType     string `json:"organization_type,omitempty"`
+	OrganizationLocation string `json:"organization_location,omitempty"`
+	OrganizationPhone    string `json:"organization_phone,omitempty"`
 }

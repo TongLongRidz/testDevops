@@ -172,7 +172,7 @@ func (h *AuthHandler) UpdateMe(c *fiber.Ctx) error {
 	})
 }
 
-// FirstLogin - ตั้งค่าข้อมูลครั้งแรกสำหรับนักศึกษา
+// FirstLogin - ตั้งค่าข้อมูลครั้งแรกสำหรับนักศึกษา/องค์กร
 func (h *AuthHandler) FirstLogin(c *fiber.Ctx) error {
 	u := c.Locals("current_user")
 	if u == nil {
@@ -183,65 +183,124 @@ func (h *AuthHandler) FirstLogin(c *fiber.Ctx) error {
 	if !ok {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "invalid user"})
 	}
-	if user.RoleID != 1 {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
-	}
 
-	file, err := c.FormFile("profile_image")
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "profile_image is required"})
-	}
-
-	studentNumber := strings.TrimSpace(c.FormValue("student_number"))
+	// รับข้อมูลจาก form-data
 	prefix := strings.TrimSpace(c.FormValue("prefix"))
 	firstname := strings.TrimSpace(c.FormValue("firstname"))
 	lastname := strings.TrimSpace(c.FormValue("lastname"))
 	campusIDStr := strings.TrimSpace(c.FormValue("campus_id"))
-	facultyIDStr := strings.TrimSpace(c.FormValue("faculty_id"))
-	departmentIDStr := strings.TrimSpace(c.FormValue("department_id"))
-	if studentNumber == "" || prefix == "" || firstname == "" || lastname == "" || campusIDStr == "" || facultyIDStr == "" || departmentIDStr == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "missing required fields"})
+
+	// Validation common fields
+	if prefix == "" || firstname == "" || lastname == "" || campusIDStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "prefix, firstname, lastname, and campus_id are required"})
 	}
+
 	campusID, err := strconv.Atoi(campusIDStr)
 	if err != nil || campusID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid campus_id"})
 	}
-	facultyID, err := strconv.ParseUint(facultyIDStr, 10, 32)
-	if err != nil || facultyID == 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid faculty_id"})
-	}
-	departmentID, err := strconv.ParseUint(departmentIDStr, 10, 32)
-	if err != nil || departmentID == 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid department_id"})
-	}
 
-	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if ext == "" {
-		ext = ".jpg"
-	}
-	uploadDir := filepath.Join("uploads", "user-profile")
-	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to prepare upload directory"})
-	}
-	fileName := fmt.Sprintf("%d%s", user.UserID, ext)
-	savePath := filepath.Join(uploadDir, fileName)
-	if err := c.SaveFile(file, savePath); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to save profile image"})
-	}
-	imagePath := "/" + filepath.ToSlash(savePath)
-
+	// Prepare request object
 	req := authDto.FirstLoginRequest{
-		StudentNumber: studentNumber,
-		Prefix:        prefix,
-		Firstname:     firstname,
-		Lastname:      lastname,
-		CampusID:      campusID,
-		FacultyID:     uint(facultyID),
-		DepartmentID:  uint(departmentID),
+		Prefix:    prefix,
+		Firstname: firstname,
+		Lastname:  lastname,
+		CampusID:  campusID,
 	}
 
-	updatedUser, updatedStudent, err := h.AuthService.CompleteFirstLogin(c.Context(), user.UserID, &req, imagePath)
+	var imagePath string
+
+	// Handle ตามประเภท Role
+	switch user.RoleID {
+	case 1: // Student
+		studentNumber := strings.TrimSpace(c.FormValue("student_number"))
+		facultyIDStr := strings.TrimSpace(c.FormValue("faculty_id"))
+		departmentIDStr := strings.TrimSpace(c.FormValue("department_id"))
+
+		if studentNumber == "" || facultyIDStr == "" || departmentIDStr == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "student_number, faculty_id, and department_id are required for student"})
+		}
+
+		facultyID, err := strconv.ParseUint(facultyIDStr, 10, 32)
+		if err != nil || facultyID == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid faculty_id"})
+		}
+
+		departmentID, err := strconv.ParseUint(departmentIDStr, 10, 32)
+		if err != nil || departmentID == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid department_id"})
+		}
+
+		req.StudentNumber = studentNumber
+		req.FacultyID = uint(facultyID)
+		req.DepartmentID = uint(departmentID)
+
+		// Handle profile image for Student
+		file, err := c.FormFile("profile_image")
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "profile_image is required for student"})
+		}
+
+		ext := strings.ToLower(filepath.Ext(file.Filename))
+		if ext == "" {
+			ext = ".jpg"
+		}
+
+		uploadDir := filepath.Join("uploads", "user-profile")
+		if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to prepare upload directory"})
+		}
+
+		fileName := fmt.Sprintf("%d%s", user.UserID, ext)
+		savePath := filepath.Join(uploadDir, fileName)
+		if err := c.SaveFile(file, savePath); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to save profile image"})
+		}
+
+		imagePath = "/" + filepath.ToSlash(savePath)
+
+	case 9: // Organization
+		orgName := strings.TrimSpace(c.FormValue("organization_name"))
+		if orgName == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization_name is required for organization"})
+		}
+
+		req.OrganizationName = orgName
+		req.OrganizationType = strings.TrimSpace(c.FormValue("organization_type"))
+		req.OrganizationLocation = strings.TrimSpace(c.FormValue("organization_location"))
+		req.OrganizationPhone = strings.TrimSpace(c.FormValue("organization_phone"))
+
+		// Optional: profile image for Organization
+		file, err := c.FormFile("profile_image")
+		if err == nil {
+			ext := strings.ToLower(filepath.Ext(file.Filename))
+			if ext == "" {
+				ext = ".jpg"
+			}
+
+			uploadDir := filepath.Join("uploads", "user-profile")
+			if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to prepare upload directory"})
+			}
+
+			fileName := fmt.Sprintf("%d%s", user.UserID, ext)
+			savePath := filepath.Join(uploadDir, fileName)
+			if err := c.SaveFile(file, savePath); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to save profile image"})
+			}
+
+			imagePath = "/" + filepath.ToSlash(savePath)
+		}
+
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid role_id"})
+	}
+
+	fmt.Printf("[FirstLogin] userID=%d roleID=%d imagePath=%s\n", user.UserID, user.RoleID, imagePath)
+
+	updatedUser, _, err := h.AuthService.CompleteFirstLogin(c.Context(), user.UserID, &req, imagePath)
 	if err != nil {
+		fmt.Printf("[FirstLogin] error: %v\n", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
@@ -260,12 +319,6 @@ func (h *AuthHandler) FirstLogin(c *fiber.Ctx) error {
 			"is_first_login": updatedUser.IsFirstLogin,
 			"created_at":     updatedUser.CreatedAt,
 			"latest_update":  updatedUser.LatestUpdate,
-		},
-		"student": fiber.Map{
-			"student_id":     updatedStudent.StudentID,
-			"student_number": updatedStudent.StudentNumber,
-			"faculty_id":     updatedStudent.FacultyID,
-			"department_id":  updatedStudent.DepartmentID,
 		},
 	})
 }
