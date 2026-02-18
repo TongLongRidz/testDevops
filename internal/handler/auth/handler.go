@@ -10,8 +10,9 @@ import (
 )
 
 type AuthHandler struct {
-	AuthService    usecase.AuthService
-	StudentService usecase.StudentService
+	AuthService         usecase.AuthService
+	StudentService      usecase.StudentService
+	OrganizationService usecase.OrganizationService
 }
 
 func NewAuthHandler(u usecase.AuthService) *AuthHandler {
@@ -20,6 +21,10 @@ func NewAuthHandler(u usecase.AuthService) *AuthHandler {
 
 func NewAuthHandlerWithStudent(u usecase.AuthService, s usecase.StudentService) *AuthHandler {
 	return &AuthHandler{AuthService: u, StudentService: s}
+}
+
+func NewAuthHandlerWithServices(u usecase.AuthService, s usecase.StudentService, o usecase.OrganizationService) *AuthHandler {
+	return &AuthHandler{AuthService: u, StudentService: s, OrganizationService: o}
 }
 
 func (h *AuthHandler) GoogleLogin(c *fiber.Ctx) error {

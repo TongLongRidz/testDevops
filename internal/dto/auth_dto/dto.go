@@ -58,19 +58,21 @@ type UserResponse struct {
 
 // MeResponse คือข้อมูล /me endpoint
 type MeResponse struct {
-	UserID       uint           `json:"user_id"`
-	Prefix       string         `json:"prefix"`
-	Firstname    string         `json:"firstname"`
-	Lastname     string         `json:"lastname"`
-	Email        string         `json:"email"`
-	ImagePath    string         `json:"image_path"`
-	Provider     string         `json:"provider"`
-	RoleID       int            `json:"role_id"`
-	CampusID     int            `json:"campus_id"`
-	IsFirstLogin bool           `json:"is_first_login"`
-	CreatedAt    time.Time      `json:"created_at"`
-	LatestUpdate time.Time      `json:"latest_update"`
-	StudentData  *StudentMeData `json:"student_data,omitempty"`
+	UserID       uint      `json:"user_id"`
+	Prefix       string    `json:"prefix"`
+	Firstname    string    `json:"firstname"`
+	Lastname     string    `json:"lastname"`
+	Email        string    `json:"email"`
+	ImagePath    string    `json:"image_path"`
+	Provider     string    `json:"provider"`
+	RoleID       int       `json:"role_id"`
+	CampusID     int       `json:"campus_id"`
+	IsFirstLogin bool      `json:"is_first_login"`
+	CreatedAt    time.Time `json:"created_at"`
+	LatestUpdate time.Time `json:"latest_update"`
+
+	StudentData      *StudentMeData      `json:"student_data,omitempty"`
+	OrganizationData *OrganizationMeData `json:"organization_data,omitempty"`
 }
 
 type StudentMeData struct {
@@ -78,6 +80,14 @@ type StudentMeData struct {
 	StudentNumber string `json:"student_number"`
 	FacultyID     uint   `json:"faculty_id"`
 	DepartmentID  uint   `json:"department_id"`
+}
+
+type OrganizationMeData struct {
+	OrganizationID       uint   `json:"organization_id"`
+	OrganizationName     string `json:"organization_name"`
+	OrganizationType     string `json:"organization_type"`
+	OrganizationLocation string `json:"organization_location"`
+	OrganizationPhone    string `json:"organization_phone"`
 }
 
 // UpdateUserRequest ใช้สำหรับอัพเดทข้อมูล current user

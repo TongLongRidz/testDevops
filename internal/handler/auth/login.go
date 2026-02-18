@@ -304,21 +304,51 @@ func (h *AuthHandler) FirstLogin(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	// สร้าง response
+	response := authDto.MeResponse{
+		UserID:       updatedUser.UserID,
+		Prefix:       updatedUser.Prefix,
+		Firstname:    updatedUser.Firstname,
+		Lastname:     updatedUser.Lastname,
+		Email:        updatedUser.Email,
+		ImagePath:    updatedUser.ImagePath,
+		Provider:     updatedUser.Provider,
+		RoleID:       updatedUser.RoleID,
+		CampusID:     updatedUser.CampusID,
+		IsFirstLogin: updatedUser.IsFirstLogin,
+		CreatedAt:    updatedUser.CreatedAt,
+		LatestUpdate: updatedUser.LatestUpdate,
+	}
+
+	// ถ้า RoleID = 1 (Student) ให้ดึงข้อมูล Student ด้วย
+	if updatedUser.RoleID == 1 && h.StudentService != nil {
+		student, err := h.StudentService.GetStudentByUserID(c.Context(), updatedUser.UserID)
+		if err == nil && student != nil {
+			response.StudentData = &authDto.StudentMeData{
+				StudentID:     student.StudentID,
+				StudentNumber: student.StudentNumber,
+				FacultyID:     student.FacultyID,
+				DepartmentID:  student.DepartmentID,
+			}
+		}
+	}
+
+	// ถ้า RoleID = 9 (Organization) ให้ดึงข้อมูล Organization ด้วย
+	if updatedUser.RoleID == 9 && h.OrganizationService != nil {
+		org, err := h.OrganizationService.GetByUserID(c.Context(), updatedUser.UserID)
+		if err == nil && org != nil {
+			response.OrganizationData = &authDto.OrganizationMeData{
+				OrganizationID:       org.OrganizationID,
+				OrganizationName:     org.OrganizationName,
+				OrganizationType:     org.OrganizationType,
+				OrganizationLocation: org.OrganizationLocation,
+				OrganizationPhone:    org.OrganizationPhoneNumber,
+			}
+		}
+	}
+
 	return c.JSON(fiber.Map{
 		"message": "first login completed",
-		"user": fiber.Map{
-			"user_id":        updatedUser.UserID,
-			"prefix":         updatedUser.Prefix,
-			"firstname":      updatedUser.Firstname,
-			"lastname":       updatedUser.Lastname,
-			"email":          updatedUser.Email,
-			"image_path":     updatedUser.ImagePath,
-			"provider":       updatedUser.Provider,
-			"role_id":        updatedUser.RoleID,
-			"campus_id":      updatedUser.CampusID,
-			"is_first_login": updatedUser.IsFirstLogin,
-			"created_at":     updatedUser.CreatedAt,
-			"latest_update":  updatedUser.LatestUpdate,
-		},
+		"user":    response,
 	})
 }

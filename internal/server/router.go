@@ -61,7 +61,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 
 	// --- 4. Handler Layer (Controller) ---
 	// สร้าง Handler ที่จะรับ HTTP Request
-	authHandler := auth.NewAuthHandlerWithStudent(authService, studentService)
+	authHandler := auth.NewAuthHandlerWithServices(authService, studentService, organizationService)
 	awardHandler := awardform.NewAwardHandler(awardService, studentService, academicYearService, awardFormLogService)
 	userHandler := user.NewUserHandler(userService)
 	academicYearHandler := academicyear.NewAcademicYearHandler(academicYearService)
