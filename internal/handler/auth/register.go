@@ -1,8 +1,8 @@
 package auth
 
 import (
-	"fmt"
 	authDto "backend/internal/dto/auth_dto"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -47,6 +47,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"user_id":        createdUser.UserID,
 		"email":          createdUser.Email,
+		"role_id":        createdUser.RoleID,
 		"is_first_login": createdUser.IsFirstLogin,
 		"provider":       createdUser.Provider,
 	})

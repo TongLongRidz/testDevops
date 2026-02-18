@@ -53,6 +53,14 @@ func NewAuthUsecaseWithRepos(repo repository.UserRepository, studentRepo reposit
 	return &authService{repo: repo, studentRepo: studentRepo, orgRepo: orgRepo, googleCfg: cfg}
 }
 
+// determineRoleByEmail กำหนด role_id ตาม email domain
+func determineRoleByEmail(email string) int {
+	if strings.HasSuffix(strings.ToLower(email), "@ku.th") {
+		return 1 // Student
+	}
+	return 9 // Organization
+}
+
 func (u *authService) GetGoogleLoginURL() string {
 	return u.googleCfg.Config.AuthCodeURL("state-token") // ในโปรดักชั่นควรสุ่ม state
 }
@@ -95,14 +103,15 @@ func (u *authService) ProcessGoogleLogin(code string) (*models.User, error) {
 	}
 
 	if existing == nil {
-		// --- สร้างผู้ใช้ใหม่ (เหมือน register สำหรับ student) ---
+		// --- สร้างผู้ใช้ใหม่ ---
+		roleID := determineRoleByEmail(googleUser.Email)
 		user := &models.User{
 			Email:        googleUser.Email,
 			Firstname:    googleUser.GivenName,  // ใช้ Firstname (n ตัวเล็ก) ตามที่คุณกำหนด
 			Lastname:     googleUser.FamilyName, // ใช้ Lastname (n ตัวเล็ก) ตามที่คุณกำหนด
 			ImagePath:    googleUser.Picture,    // ใช้ ImagePath ตามที่คุณกำหนด
 			Provider:     "google",              // ระบุเป็น google เพื่อแยกกับ 'manual'
-			RoleID:       1,
+			RoleID:       roleID,
 			IsFirstLogin: true,
 			CreatedAt:    now,
 			LatestUpdate: now,
@@ -115,7 +124,8 @@ func (u *authService) ProcessGoogleLogin(code string) (*models.User, error) {
 			return nil, err
 		}
 
-		if u.studentRepo != nil {
+		// สร้าง Student หรือ Organization record ตาม RoleID
+		if roleID == 1 && u.studentRepo != nil {
 			student := &models.Student{
 				UserID:        user.UserID,
 				StudentNumber: "",
@@ -123,6 +133,17 @@ func (u *authService) ProcessGoogleLogin(code string) (*models.User, error) {
 				DepartmentID:  0,
 			}
 			if err := u.studentRepo.Create(context.Background(), student); err != nil {
+				return nil, err
+			}
+		} else if roleID == 9 && u.orgRepo != nil {
+			org := &models.Organization{
+				UserID:                  user.UserID,
+				OrganizationName:        "",
+				OrganizationType:        "",
+				OrganizationLocation:    "",
+				OrganizationPhoneNumber: "",
+			}
+			if err := u.orgRepo.Create(context.Background(), org); err != nil {
 				return nil, err
 			}
 		}
@@ -183,11 +204,14 @@ func (u *authService) Register(req *authDto.RegisterRequest) (*models.User, erro
 		return nil, err
 	}
 
+	// กำหนด RoleID ตาม email domain
+	roleID := determineRoleByEmail(req.Email)
+
 	user := &models.User{
 		Email:          req.Email,
 		HashedPassword: string(hashed),
 		Provider:       "manual",
-		RoleID:         1, // Default: Student
+		RoleID:         roleID,
 		IsFirstLogin:   true,
 		CreatedAt:      time.Now(),
 		LatestUpdate:   time.Now(),
@@ -198,8 +222,8 @@ func (u *authService) Register(req *authDto.RegisterRequest) (*models.User, erro
 		return nil, err
 	}
 
-	// สร้าง Student record ถ้ามี studentRepo
-	if u.studentRepo != nil {
+	// สร้าง Student หรือ Organization record ตาม RoleID
+	if roleID == 1 && u.studentRepo != nil {
 		student := &models.Student{
 			UserID:        user.UserID,
 			StudentNumber: "", // ค่าว่างเพราะยังไม่ได้กรอก
@@ -208,6 +232,15 @@ func (u *authService) Register(req *authDto.RegisterRequest) (*models.User, erro
 		}
 		// ไม่ return error ถ้าสร้าง student ไม่สำเร็จ เพื่อให้ register สำเร็จ
 		_ = u.studentRepo.Create(context.Background(), student)
+	} else if roleID == 9 && u.orgRepo != nil {
+		org := &models.Organization{
+			UserID:                  user.UserID,
+			OrganizationName:        "",
+			OrganizationType:        "",
+			OrganizationLocation:    "",
+			OrganizationPhoneNumber: "",
+		}
+		_ = u.orgRepo.Create(context.Background(), org)
 	}
 
 	return user, nil

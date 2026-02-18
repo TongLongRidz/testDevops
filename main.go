@@ -42,6 +42,7 @@ func main() {
 		&models.AssociateDean{},
 		&models.HeadOfDepartment{},
 		&models.President{},
+		&models.Organization{},
 	); err != nil {
 		log.Fatal("Migration failed: ", err)
 	}
