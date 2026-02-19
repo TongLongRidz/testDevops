@@ -6,24 +6,29 @@ import (
 
 // --- Request DTOs ---
 type SubmitAwardRequest struct {
-	// ข้อมูลเหล่านี้จะดึงจาก Token: UserID, StudentFirstname, StudentLastname, StudentEmail, StudentNumber, FacultyID, DepartmentID, CampusID
-	// ข้อมูลเหล่านี้จะดึงจาก Academic Year Service: AcademicYear, Semester
-	AwardType          string    `json:"award_type" binding:"required"`
+	// === Role: STUDENT (RoleID = 1) ===
+	// System Auto-Fill จาก Token: UserID, StudentFirstname, StudentLastname, StudentEmail, StudentNumber, FacultyID, DepartmentID, CampusID
+	// System Auto-Fill จาก Academic Year Service: AcademicYear, Semester
+	// Student กรอก:
+	AwardType          string    `json:"award_type"`
 	StudentYear        int       `json:"student_year"`
 	AdvisorName        string    `json:"advisor_name"`
 	StudentPhoneNumber string    `json:"student_phone_number"`
 	StudentAddress     string    `json:"student_address"`
 	GPA                float64   `json:"gpa"`
 	StudentDateOfBirth time.Time `json:"student_date_of_birth"`
+	FormDetail         string    `json:"form_detail"`
 
-	// Organization Information
-	OrgName        string `json:"org_name"`
-	OrgType        string `json:"org_type"`
-	OrgLocation    string `json:"org_location"`
-	OrgPhoneNumber string `json:"org_phone_number"`
-
-	// Form Detail
-	FormDetail string `json:"form_detail"`
+	// === Role: ORGANIZATION (RoleID = 9) ===
+	// System Auto-Fill จาก Token: UserID, CampusID
+	// System Auto-Fill จาก Organization & Academic Year Service: OrgName, OrgType, OrgLocation, OrgPhoneNumber, AcademicYear, Semester
+	// Organization กรอก:
+	StudentFirstname string `json:"student_firstname"`
+	StudentLastname  string `json:"student_lastname"`
+	StudentEmail     string `json:"student_email"`
+	StudentNumber    string `json:"student_number"`
+	FacultyID        int    `json:"faculty_id"`
+	DepartmentID     int    `json:"department_id"`
 }
 
 // --- Response DTOs ---

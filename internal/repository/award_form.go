@@ -114,6 +114,53 @@ func (r *AwardRepository) GetByUserID(ctx context.Context, userID uint) ([]model
 	return list, err
 }
 
+func (r *AwardRepository) GetByUserIDAndSemester(ctx context.Context, userID uint, year int, semester int) ([]models.AwardForm, error) {
+	var list []models.AwardForm
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND academic_year = ? AND semester = ?", userID, year, semester).
+		Preload("AwardFiles").
+		Order("created_at desc").
+		Find(&list).Error
+	return list, err
+}
+
+func (r *AwardRepository) GetByUserIDWithYearSort(ctx context.Context, userID uint, years []int) ([]models.AwardForm, error) {
+	var list []models.AwardForm
+	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
+	if len(years) > 0 {
+		query = query.Where("academic_year IN ?", years)
+	}
+	err := query.
+		Preload("AwardFiles").
+		Order("created_at desc").
+		Find(&list).Error
+	return list, err
+}
+
+func (r *AwardRepository) GetByUserIDWithYearPaged(ctx context.Context, userID uint, years []int, page int, limit int) ([]models.AwardForm, int64, error) {
+	var list []models.AwardForm
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&models.AwardForm{}).Where("user_id = ?", userID)
+	if len(years) > 0 {
+		query = query.Where("academic_year IN ?", years)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := query.
+		Preload("AwardFiles").
+		Order("created_at desc").
+		Limit(limit).
+		Offset(offset).
+		Find(&list).Error
+
+	return list, total, err
+}
+
 func (r *AwardRepository) GetByStudentID(ctx context.Context, studentID int) ([]models.AwardForm, error) {
 	var list []models.AwardForm
 	err := r.db.WithContext(ctx).
@@ -168,4 +215,20 @@ func (r *AwardRepository) UpdateFormStatus(ctx context.Context, formID uint, for
 			"form_status_id": formStatus,
 			"latest_update":  time.Now(),
 		}).Error
+}
+
+// GetAllAwardTypes ดึง award_type ทั้งหมดที่มีในตาราง (ไม่ซ้ำกัน)
+func (r *AwardRepository) GetAllAwardTypes(ctx context.Context) ([]string, error) {
+	var awardTypes []string
+	err := r.db.WithContext(ctx).
+		Model(&models.AwardForm{}).
+		Distinct("award_type").
+		Order("award_type ASC").
+		Pluck("award_type", &awardTypes).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return awardTypes, nil
 }

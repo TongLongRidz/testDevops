@@ -17,10 +17,14 @@ type AwardUseCase interface {
 	GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, awardType string, page int, limit int, arrangement string) (*awardformdto.PaginatedAwardResponse, error)
 	GetAwardsByUserID(ctx context.Context, userID uint) ([]awardformdto.AwardFormResponse, error)
 	GetAwardsByStudentID(ctx context.Context, studentID int) ([]awardformdto.AwardFormResponse, error)
+	GetAwardsByUserIDAndSemester(ctx context.Context, userID uint, year int, semester int) ([]awardformdto.AwardFormResponse, error)
+	GetAwardsByUserIDWithYearSort(ctx context.Context, userID uint, years []int) ([]awardformdto.AwardFormResponse, error)
+	GetAwardsByUserIDPaged(ctx context.Context, userID uint, years []int, page int, limit int) (*awardformdto.PaginatedAwardResponse, error)
 	GetByFormID(ctx context.Context, formID int) (*awardformdto.AwardFormResponse, error)
 	IsDuplicate(userID uint, year int, semester int) (bool, error)
 	UpdateAwardType(ctx context.Context, formID uint, awardType string, changedBy uint) error
 	UpdateFormStatus(ctx context.Context, formID uint, formStatus int, changedBy uint) error
+	GetAllAwardTypes(ctx context.Context) ([]string, error)
 }
 
 type awardUseCase struct {
@@ -48,7 +52,7 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 		return errors.New("no open registration period found")
 	}
 
-	// 2. เตรียม Model ตารางหลัก (Award_Form)
+	// 2. เตรียม Model ตารางหลัก (Award_Form) - พื้นฐาน
 	now := time.Now()
 	form := models.AwardForm{
 		UserID:             userID,
@@ -64,20 +68,16 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 		StudentAddress:     input.StudentAddress,
 		GPA:                input.GPA,
 		StudentDateOfBirth: input.StudentDateOfBirth,
-		OrgName:            input.OrgName,
-		OrgType:            input.OrgType,
-		OrgLocation:        input.OrgLocation,
-		OrgPhoneNumber:     input.OrgPhoneNumber,
 		FormDetail:         input.FormDetail,
 	}
 
 	// 3. เช็ค Role และดึงข้อมูลตาม Role
-	// ต้องดึง User เพื่อเช็ค RoleID
 	student, studentErr := u.studentService.GetStudentByUserID(ctx, userID)
 	org, orgErr := u.organizationService.GetByUserID(ctx, userID)
 
+	// ===== ROLE: STUDENT (RoleID = 1) =====
 	if studentErr == nil && student != nil {
-		// Role: Student (RoleID = 1)
+		// ดึงจาก Student Service:
 		form.StudentFirstname = student.User.Firstname
 		form.StudentLastname = student.User.Lastname
 		form.StudentEmail = student.User.Email
@@ -85,14 +85,29 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 		form.FacultyID = int(student.FacultyID)
 		form.DepartmentID = int(student.DepartmentID)
 		form.CampusID = student.User.CampusID
+		// Organization info ไม่ต้องกรอก
+		form.OrgName = ""
+		form.OrgType = ""
+		form.OrgLocation = ""
+		form.OrgPhoneNumber = ""
+
+		// ===== ROLE: ORGANIZATION (RoleID = 9) =====
 	} else if orgErr == nil && org != nil {
-		// Role: Organization (RoleID = 9)
+		// ดึงจาก Organization Service:
 		form.OrgName = org.OrganizationName
 		form.OrgType = org.OrganizationType
 		form.OrgLocation = org.OrganizationLocation
 		form.OrgPhoneNumber = org.OrganizationPhoneNumber
-		// CampusID ดึงจาก User
 		form.CampusID = org.User.CampusID
+
+		// ใช้ข้อมูลที่ Organization กรอก:
+		form.StudentFirstname = input.StudentFirstname
+		form.StudentLastname = input.StudentLastname
+		form.StudentEmail = input.StudentEmail
+		form.StudentNumber = input.StudentNumber
+		form.FacultyID = input.FacultyID
+		form.DepartmentID = input.DepartmentID
+
 	} else {
 		return errors.New("user must be either a student or an organization")
 	}
@@ -200,6 +215,64 @@ func (u *awardUseCase) GetAwardsByStudentID(ctx context.Context, studentID int) 
 	return response, nil
 }
 
+func (u *awardUseCase) GetAwardsByUserIDAndSemester(ctx context.Context, userID uint, year int, semester int) ([]awardformdto.AwardFormResponse, error) {
+	results, err := u.repo.GetByUserIDAndSemester(ctx, userID, year, semester)
+	if err != nil {
+		return nil, err
+	}
+	var response []awardformdto.AwardFormResponse
+	for _, item := range results {
+		response = append(response, mapToAwardResponse(item))
+	}
+	return response, nil
+}
+
+func (u *awardUseCase) GetAwardsByUserIDWithYearSort(ctx context.Context, userID uint, years []int) ([]awardformdto.AwardFormResponse, error) {
+	results, err := u.repo.GetByUserIDWithYearSort(ctx, userID, years)
+	if err != nil {
+		return nil, err
+	}
+	var response []awardformdto.AwardFormResponse
+	for _, item := range results {
+		response = append(response, mapToAwardResponse(item))
+	}
+	return response, nil
+}
+
+func (u *awardUseCase) GetAwardsByUserIDPaged(ctx context.Context, userID uint, years []int, page int, limit int) (*awardformdto.PaginatedAwardResponse, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+
+	results, total, err := u.repo.GetByUserIDWithYearPaged(ctx, userID, years, page, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	var response []awardformdto.AwardFormResponse
+	for _, item := range results {
+		response = append(response, mapToAwardResponse(item))
+	}
+
+	totalPages := int(total) / limit
+	if int(total)%limit > 0 {
+		totalPages++
+	}
+
+	return &awardformdto.PaginatedAwardResponse{
+		Data: response,
+		Pagination: awardformdto.PaginationMeta{
+			CurrentPage: page,
+			TotalPages:  totalPages,
+			TotalItems:  total,
+			Limit:       limit,
+		},
+	}, nil
+}
+
 func (u *awardUseCase) GetByFormID(ctx context.Context, formID int) (*awardformdto.AwardFormResponse, error) {
 	form, err := u.repo.GetByFormID(ctx, formID)
 	if err != nil {
@@ -286,4 +359,8 @@ func (u *awardUseCase) UpdateFormStatus(ctx context.Context, formID uint, formSt
 		NewValue:  strconv.Itoa(formStatus),
 	})
 	return err
+}
+
+func (u *awardUseCase) GetAllAwardTypes(ctx context.Context) ([]string, error) {
+	return u.repo.GetAllAwardTypes(ctx)
 }

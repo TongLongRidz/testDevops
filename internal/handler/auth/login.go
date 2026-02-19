@@ -125,6 +125,20 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 		}
 	}
 
+	// ถ้า RoleID = 9 (Organization) ให้ดึงข้อมูล Organization ด้วย
+	if fullUser.RoleID == 9 && h.OrganizationService != nil {
+		org, err := h.OrganizationService.GetByUserID(c.Context(), fullUser.UserID)
+		if err == nil && org != nil {
+			response.OrganizationData = &authDto.OrganizationMeData{
+				OrganizationID:       org.OrganizationID,
+				OrganizationName:     org.OrganizationName,
+				OrganizationType:     org.OrganizationType,
+				OrganizationLocation: org.OrganizationLocation,
+				OrganizationPhone:    org.OrganizationPhoneNumber,
+			}
+		}
+	}
+
 	return c.JSON(fiber.Map{
 		"user": response,
 	})

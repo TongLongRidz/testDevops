@@ -6,7 +6,7 @@ import (
 
 type AwardForm struct {
 	FormID             uint      `gorm:"primaryKey;column:form_id" json:"form_id"`
-	UserID             uint      `gorm:"column:user_id" json:"user_id"`
+	UserID             uint      `gorm:"uniqueIndex:idx_user_semester;column:user_id" json:"user_id"`
 	StudentFirstname   string    `gorm:"column:student_firstname" json:"student_firstname"`
 	StudentLastname    string    `gorm:"column:student_lastname" json:"student_lastname"`
 	StudentEmail       string    `gorm:"column:student_email" json:"student_email"`

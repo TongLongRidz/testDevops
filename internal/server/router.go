@@ -104,8 +104,8 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	facultyGroup.Post("/create", facultyHandler.CreateFaculty)
 	facultyGroup.Get("/", facultyHandler.GetAllFaculties)
 	facultyGroup.Get("/:id", facultyHandler.GetFacultyByID)
-	facultyGroup.Put("/edit/:id", facultyHandler.UpdateFaculty)
-	facultyGroup.Delete("/delete/:id", facultyHandler.DeleteFaculty)
+	// facultyGroup.Put("/edit/:id", facultyHandler.UpdateFaculty)
+	// facultyGroup.Delete("/delete/:id", facultyHandler.DeleteFaculty)
 
 	// --- Department Routes ---
 	departmentGroup := apiGroup.Group("/department")
@@ -113,23 +113,27 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	departmentGroup.Get("/", departmentHandler.GetAllDepartments)
 	departmentGroup.Get("/:id", departmentHandler.GetDepartmentByID)
 	departmentGroup.Get("/faculty/:facultyId", departmentHandler.GetDepartmentsByFacultyID)
-	departmentGroup.Put("/edit/:id", departmentHandler.UpdateDepartment)
-	departmentGroup.Delete("/delete/:id", departmentHandler.DeleteDepartment)
+	// departmentGroup.Put("/edit/:id", departmentHandler.UpdateDepartment)
+	// departmentGroup.Delete("/delete/:id", departmentHandler.DeleteDepartment)
 
 	// --- Student Routes ---
 	studentGroup := apiGroup.Group("/students")
-	studentGroup.Get("/", studentHandler.GetAllStudents)
 	studentGroup.Get("/me", middleware.RequireAuth(userRepo), studentHandler.GetMyStudent)
 	studentGroup.Get("/:id", studentHandler.GetStudentByID)
-	studentGroup.Post("/user/:userId", studentHandler.CreateStudent)
-	studentGroup.Put("/edit/:id", studentHandler.UpdateStudent)
-	studentGroup.Put("/me", middleware.RequireAuth(userRepo), studentHandler.UpdateMyStudent)
-	studentGroup.Delete("/delete/:id", studentHandler.DeleteStudent)
+	// studentGroup.Get("/", studentHandler.GetAllStudents)
+	// studentGroup.Post("/user/:userId", studentHandler.CreateStudent) // ?
+	// studentGroup.Put("/edit/:id", studentHandler.UpdateStudent) // ?
+	// studentGroup.Put("/me", middleware.RequireAuth(userRepo), studentHandler.UpdateMyStudent) // ?
+	// studentGroup.Delete("/delete/:id", studentHandler.DeleteStudent) // ?
 
 	awardGroup := apiGroup.Group("/awards", middleware.RequireAuth(userRepo))
 	awardGroup.Post("/submit", awardHandler.Submit)                  // POST /awards/submit
 	awardGroup.Get("/search", awardHandler.GetByKeyword)             // ค้นหาและกรองพร้อม pagination (query: keyword, date, student_year, page, limit)
-	awardGroup.Get("/my/submissions", awardHandler.GetMySubmissions) // ดูการส่งฟอร์มของนักเรียน (sorted by created_at)
+	awardGroup.Get("/my/submissions", awardHandler.GetMySubmissions)                           // ดูการส่งฟอร์มของตัวเอง (Student/Organization) - sorted by created_at desc (ทั้งหมดที่เคยส่ง)
+	awardGroup.Get("/my/submissions/current", awardHandler.GetMyCurrentSemesterSubmissions) // ดูการส่งฟอร์มของตัวเองในภาคเรียนปัจจุบัน (isActive)
+	awardGroup.Get("/types", awardHandler.GetAllAwardTypes)
+	awardGroup.Get("/details/:formId", awardHandler.GetByFormID)             // GET /awards/:formId - ดูรายละเอียดฟอร์ม
+	// 
 	awardGroup.Post("/:formId/logs", awardHandler.CreateLog)         // POST /awards/:formId/logs
 	awardGroup.Get("/:formId/logs", awardHandler.GetLogsByFormID)    // GET /awards/:formId/logs
 	awardGroup.Put("/:formId/award-type", awardHandler.UpdateAwardType)
