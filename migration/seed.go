@@ -9,21 +9,19 @@ import (
 
 func SeedFormStatus(db *gorm.DB) error {
 	formStatuses := []models.FormStatus{
-		{FormStatusName: "Send_to_HoD"},
-		{FormStatusName: "Send_to_AsD"},
-		{FormStatusName: "Rejected_by_HoD"},
-		{FormStatusName: "Send_to_Dean"},
-		{FormStatusName: "Rejected_by_AsD"},
-		{FormStatusName: "Send_to_StD"},
-		{FormStatusName: "Rejected_by_Dean"},
-		{FormStatusName: "Send_to_Com"},
-		{FormStatusName: "Rejected_by_StD"},
-		{FormStatusName: "Send_to_ComPres"},
-		{FormStatusName: "Rejected_by_Com"},
-		{FormStatusName: "Send_to_Chan"},
-		{FormStatusName: "Rejected_by_ComPres"},
-		{FormStatusName: "Accepted_By_Chan"},
-		{FormStatusName: "Rejected_by_Chan"},
+		{FormStatusName: "ฟอร์มใหม่"},
+		{FormStatusName: "อนุมัติโดยหัวหน้าภาควิชา"}, // ส่งต่อให้รองคณบดี
+		{FormStatusName: "ปฏิเสธโดยหัวหน้าภาควิชา"},
+		{FormStatusName: "อนุมัติโดยรองคณบดี"}, // ส่งต่อให้คณบดี
+		{FormStatusName: "ปฏิเสธโดยรองคณบดี"},
+		{FormStatusName: "อนุมัติโดยคณบดี"}, // ส่งต่อให้กองพัฒนานิสิต
+		{FormStatusName: "ปฏิเสธโดยคณบดี"},
+		{FormStatusName: "อนุมัติโดยกองพัฒนานิสิต"}, // ส่งต่อให้คณะกรรมการ
+		{FormStatusName: "ตีกลับโดยคณะกรรมการ"}, // ให้นิสิตแก้ให้เสร็จแล้วส่งใหม่ กลับไป status ก่อนหน้า [ลูปก่อนหน้ากับอันนี้จนกว่าจะผ่าน]
+		{FormStatusName: "อนุมัติโดยคณะกรรมการ"}, // โหวตผ่านเกินครึ่ง
+		{FormStatusName: "ปฏิเสธโดยคณะกรรมการ"}, // โหวตไม่ผ่านเกินครึ่ง (หรือไม่ถึงในเวลา?)
+		{FormStatusName: "ลงนามโดยประธานคณะกรรมการ"}, // ส่งต่อให้อธิการบดี
+		{FormStatusName: "ลงนามโดยอธิการบดี"},
 	}
 
 	// ตรวจสอบว่า FormStatus มีข้อมูลอยู่แล้วหรือไม่

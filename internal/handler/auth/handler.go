@@ -3,6 +3,7 @@ package auth
 import (
 	"backend/internal/usecase"
 	"os"
+
 	// "time"
 	"fmt"
 
@@ -94,7 +95,7 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 		isFirstLoginStr = "true"
 	}
 
-	// Map Role ID to Role Name (ตัวอย่างการแปลง RoleID เป็น String)
+	// Map Role ID to Role Name
 	roleName := "student"
 	switch user.RoleID {
 	case 1:
@@ -102,8 +103,19 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	case 2:
 		roleName = "head_of_department"
 	case 3:
+		roleName = "associate_dean"
+	case 4:
 		roleName = "dean"
-	// เพิ่ม Role อื่นๆ ตามต้องการ
+	case 5:
+		roleName = "student_development"
+	case 6:
+		roleName = "committee"
+	case 7:
+		roleName = "committee_chairman"
+	case 8:
+		roleName = "chancellor"
+	case 9:
+		roleName = "organization"
 	default:
 		roleName = "student"
 	}

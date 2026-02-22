@@ -78,9 +78,11 @@ type SearchAwardRequest struct {
 	Date        string `query:"date"`         // กรองตามวันที่ (format: YYYY-MM-DD)
 	StudentYear int    `query:"student_year"` // กรองตามชั้นปี
 	AwardType   string `query:"award_type"`   // กรองตามประเภทรางวัล
+	SortBy      string `query:"sort_by"`      // name, studentNumber, academicYear, awardType, date (default: date)
+	SortOrder   string `query:"sort_order"`   // asc, des/desc (default: des)
 	Page        int    `query:"page"`         // หน้าปัจจุบัน (default: 1)
-	Limit       int    `query:"limit"`        // จำนวนต่อหน้า (default: 10)
-	Arrangement string `query:"arrangement"`  // เรียงลำดับ: asc หรือ desc (default: desc)
+	Limit       int    `query:"limit"`        // จำนวนต่อหน้า (default: 5, max: 5)
+	Arrangement string `query:"arrangement"`  // backward-compatible: asc หรือ desc
 }
 
 type PaginatedAwardResponse struct {
@@ -95,28 +97,42 @@ type PaginationMeta struct {
 	Limit       int   `json:"limit"`
 }
 
-// --- Award Form Log DTOs ---
-type CreateAwardFormLogRequest struct {
-	FormID    uint   `json:"form_id" binding:"required"`
-	FieldName string `json:"field_name" binding:"required"`
-	OldValue  string `json:"old_value"`
-	NewValue  string `json:"new_value"`
-}
-
 type UpdateAwardTypeRequest struct {
 	AwardType string `json:"award_type" binding:"required"`
 }
 
 type UpdateFormStatusRequest struct {
-	FormStatusID int `json:"form_status" binding:"required"`
+	FormStatusID int    `json:"form_status" binding:"required"`
+	RejectReason string `json:"reject_reason"`
 }
 
-type AwardFormLogResponse struct {
-	LogID     uint      `json:"log_id"`
-	FormID    uint      `json:"form_id"`
-	FieldName string    `json:"field_name"`
-	OldValue  string    `json:"old_value"`
-	NewValue  string    `json:"new_value"`
-	ChangedBy int       `json:"changed_by"`
-	CreatedAt time.Time `json:"created_at"`
+type SearchApprovalLogRequest struct {
+	Keyword    string `query:"keyword"`     // ชื่อ-นามสกุล หรือรหัสนิสิต
+	Date       string `query:"date"`        // วันที่ดำเนินการ (format: YYYY-MM-DD)
+	AwardType  string `query:"award_type"`  // ประเภทรางวัล
+	Operation  string `query:"operation"`   // อนุมัติ, ไม่อนุมัติ/ปฏิเสธ, ตีกลับ
+	SortBy     string `query:"sort_by"`     // name, studentNumber, academicYear, awardType, date (default: date)
+	SortOrder  string `query:"sort_order"`  // asc, des/desc (default: des)
+	Page       int    `query:"page"`        // default: 1
+	Limit      int    `query:"limit"`       // default: 5, max: 5
+	Arrangement string `query:"arrangement"` // backward-compatible: asc หรือ desc
+}
+
+type ApprovalLogHistoryResponse struct {
+	ApprovalLogID    uint      `json:"approval_log_id"`
+	FormID           uint      `json:"form_id"`
+	ReviewerUserID   uint      `json:"reviewer_user_id"`
+	Operation        string    `json:"operation"`
+	OperationDate    time.Time `json:"operation_date"`
+	StudentFirstname string    `json:"student_firstname"`
+	StudentLastname  string    `json:"student_lastname"`
+	StudentNumber    string    `json:"student_number"`
+	AcademicYear     int       `json:"academic_year"`
+	AwardType        string    `json:"award_type"`
+	CampusID         int       `json:"campus_id"`
+}
+
+type PaginatedApprovalLogResponse struct {
+	Data       []ApprovalLogHistoryResponse `json:"data"`
+	Pagination PaginationMeta               `json:"pagination"`
 }

@@ -6,7 +6,6 @@ import (
 	"backend/internal/repository"
 	"context"
 	"errors"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -14,31 +13,32 @@ import (
 type AwardUseCase interface {
 	// ปรับปรุง: รับ userID เพื่อดึงข้อมูล student และ files
 	SubmitAward(ctx context.Context, userID uint, input awardformdto.SubmitAwardRequest, files []models.AwardFileDirectory) error
-	GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, awardType string, page int, limit int, arrangement string) (*awardformdto.PaginatedAwardResponse, error)
+	GetByKeyword(ctx context.Context, userID uint, roleID int, campusID int, keyword string, date string, studentYear int, awardType string, sortBy string, sortOrder string, page int, limit int) (*awardformdto.PaginatedAwardResponse, error)
 	GetAwardsByUserID(ctx context.Context, userID uint) ([]awardformdto.AwardFormResponse, error)
 	GetAwardsByStudentID(ctx context.Context, studentID int) ([]awardformdto.AwardFormResponse, error)
+	GetAwardsByUserIDAndYear(ctx context.Context, userID uint, year int) ([]awardformdto.AwardFormResponse, error)
 	GetAwardsByUserIDAndSemester(ctx context.Context, userID uint, year int, semester int) ([]awardformdto.AwardFormResponse, error)
 	GetAwardsByUserIDWithYearSort(ctx context.Context, userID uint, years []int) ([]awardformdto.AwardFormResponse, error)
 	GetAwardsByUserIDPaged(ctx context.Context, userID uint, years []int, page int, limit int) (*awardformdto.PaginatedAwardResponse, error)
 	GetByFormID(ctx context.Context, formID int) (*awardformdto.AwardFormResponse, error)
 	IsDuplicate(userID uint, year int, semester int) (bool, error)
 	UpdateAwardType(ctx context.Context, formID uint, awardType string, changedBy uint) error
-	UpdateFormStatus(ctx context.Context, formID uint, formStatus int, changedBy uint) error
+	UpdateFormStatus(ctx context.Context, formID uint, formStatus int, rejectReason string, changedBy uint) error
+	GetApprovalLogsByUserID(ctx context.Context, userID uint) ([]models.AwardApprovalLog, error)
+	GetApprovalHistory(ctx context.Context, userID uint, campusID int, keyword string, date string, awardType string, operation string, sortBy string, sortOrder string, page int, limit int) (*awardformdto.PaginatedApprovalLogResponse, error)
 	GetAllAwardTypes(ctx context.Context) ([]string, error)
 }
 
 type awardUseCase struct {
 	repo                *repository.AwardRepository
-	logUseCase          AwardFormLogUseCase
 	studentService      StudentService
 	organizationService OrganizationService
 	academicYearService AcademicYearService
 }
 
-func NewAwardUseCase(r *repository.AwardRepository, ss StudentService, os OrganizationService, ays AcademicYearService, logUC AwardFormLogUseCase) AwardUseCase {
+func NewAwardUseCase(r *repository.AwardRepository, ss StudentService, os OrganizationService, ays AcademicYearService) AwardUseCase {
 	return &awardUseCase{
 		repo:                r,
-		logUseCase:          logUC,
 		studentService:      ss,
 		organizationService: os,
 		academicYearService: ays,
@@ -163,20 +163,60 @@ func mapToAwardResponse(item models.AwardForm) awardformdto.AwardFormResponse {
 	return res
 }
 
-func (u *awardUseCase) GetByKeyword(ctx context.Context, campusID int, keyword string, date string, studentYear int, awardType string, page int, limit int, arrangement string) (*awardformdto.PaginatedAwardResponse, error) {
-	// ตั้งค่า default สำหรับ pagination
+func (u *awardUseCase) GetByKeyword(ctx context.Context, userID uint, roleID int, campusID int, keyword string, date string, studentYear int, awardType string, sortBy string, sortOrder string, page int, limit int) (*awardformdto.PaginatedAwardResponse, error) {
 	if page < 1 {
 		page = 1
 	}
 	if limit < 1 {
-		limit = 10
+		limit = 5
 	}
-	order := "desc"
-	if strings.ToLower(arrangement) == "asc" {
-		order = "asc"
+	if limit > 5 {
+		limit = 5
 	}
 
-	results, total, err := u.repo.GetByKeyword(ctx, campusID, keyword, date, studentYear, awardType, page, limit, order)
+	normalizedSortBy := normalizeSortBy(sortBy)
+	normalizedSortOrder := normalizeSortOrder(sortOrder)
+
+	filter := repository.AwardSearchFilter{
+		CampusID:    campusID,
+		Keyword:     strings.TrimSpace(keyword),
+		Date:        strings.TrimSpace(date),
+		StudentYear: studentYear,
+		AwardType:   strings.TrimSpace(awardType),
+		SortBy:      normalizedSortBy,
+		SortOrder:   normalizedSortOrder,
+		Page:        page,
+		Limit:       limit,
+	}
+
+	if formStatusID, hasRequiredStatus := requiredFormStatusByRole(roleID); hasRequiredStatus {
+		filter.FormStatusID = &formStatusID
+	}
+
+	if needsDepartmentScopeByRole(roleID) {
+		facultyID, departmentID, err := u.repo.GetHeadOfDepartmentScopeByUserID(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		if departmentID == 0 {
+			return nil, errors.New("unable to resolve head of department scope")
+		}
+		filter.DepartmentID = &departmentID
+		_ = facultyID
+	}
+
+	if needsFacultyScopeByRole(roleID) {
+		facultyID, err := u.repo.GetFacultyScopeByRoleAndUserID(ctx, roleID, userID)
+		if err != nil {
+			return nil, err
+		}
+		if facultyID == 0 {
+			return nil, errors.New("unable to resolve faculty scope")
+		}
+		filter.FacultyID = &facultyID
+	}
+
+	results, total, err := u.repo.GetByKeyword(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -203,8 +243,92 @@ func (u *awardUseCase) GetByKeyword(ctx context.Context, campusID int, keyword s
 	}, nil
 }
 
+func normalizeSortBy(sortBy string) string {
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "name":
+		return "name"
+	case "studentnumber":
+		return "studentNumber"
+	case "academicyear":
+		return "academicYear"
+	case "awardtype":
+		return "awardType"
+	case "date", "":
+		return "date"
+	default:
+		return "date"
+	}
+}
+
+func normalizeSortOrder(sortOrder string) string {
+	switch strings.ToLower(strings.TrimSpace(sortOrder)) {
+	case "asc":
+		return "asc"
+	case "desc", "des", "":
+		return "desc"
+	default:
+		return "desc"
+	}
+}
+
+func normalizeOperation(operation string) string {
+	switch strings.TrimSpace(operation) {
+	case "", "ทั้งหมด":
+		return ""
+	case "อนุมัติ", "approve", "approved":
+		return "อนุมัติ"
+	case "ไม่อนุมัติ", "ปฏิเสธ", "reject", "rejected":
+		return "ปฏิเสธ"
+	case "ตีกลับ", "return", "returned":
+		return "ตีกลับ"
+	default:
+		return strings.TrimSpace(operation)
+	}
+}
+
+func requiredFormStatusByRole(roleID int) (int, bool) {
+	switch roleID {
+	case 2:
+		return 1, true
+	case 3:
+		return 2, true
+	case 4:
+		return 4, true
+	case 5:
+		return 6, true
+	case 6:
+		return 8, true
+	case 7:
+		return 10, true
+	case 8:
+		return 12, true
+	default:
+		return 0, false
+	}
+}
+
+func needsDepartmentScopeByRole(roleID int) bool {
+	return roleID == 2
+}
+
+func needsFacultyScopeByRole(roleID int) bool {
+	return roleID == 3 || roleID == 4
+}
+
 func (u *awardUseCase) GetAwardsByStudentID(ctx context.Context, studentID int) ([]awardformdto.AwardFormResponse, error) {
 	results, err := u.repo.GetByStudentID(ctx, studentID)
+	if err != nil {
+		return nil, err
+	}
+	var response []awardformdto.AwardFormResponse
+	for _, item := range results {
+		response = append(response, mapToAwardResponse(item))
+	}
+	return response, nil
+}
+
+func (u *awardUseCase) GetAwardsByUserIDAndYear(ctx context.Context, userID uint, year int) ([]awardformdto.AwardFormResponse, error) {
+	results, err := u.repo.GetByUserIDAndYear(ctx, userID, year)
 	if err != nil {
 		return nil, err
 	}
@@ -318,21 +442,13 @@ func (u *awardUseCase) UpdateAwardType(ctx context.Context, formID uint, awardTy
 		return nil
 	}
 
-	oldValue := form.AwardType
 	if err := u.repo.UpdateAwardType(ctx, formID, awardType); err != nil {
 		return err
 	}
-
-	_, err = u.logUseCase.CreateLog(ctx, changedBy, &awardformdto.CreateAwardFormLogRequest{
-		FormID:    formID,
-		FieldName: "award_type",
-		OldValue:  oldValue,
-		NewValue:  awardType,
-	})
-	return err
+	return nil
 }
 
-func (u *awardUseCase) UpdateFormStatus(ctx context.Context, formID uint, formStatus int, changedBy uint) error {
+func (u *awardUseCase) UpdateFormStatus(ctx context.Context, formID uint, formStatus int, rejectReason string, changedBy uint) error {
 	form, err := u.repo.GetByFormID(ctx, int(formID))
 	if err != nil {
 		return err
@@ -347,20 +463,150 @@ func (u *awardUseCase) UpdateFormStatus(ctx context.Context, formID uint, formSt
 		return nil
 	}
 
-	oldValue := form.FormStatusID
-	if err := u.repo.UpdateFormStatus(ctx, formID, formStatus); err != nil {
+	trimmedRejectReason := strings.TrimSpace(rejectReason)
+	if isRejectOrReturnStatus(formStatus) && trimmedRejectReason == "" {
+		return errors.New("reject_reason is required for reject or return status")
+	}
+	if !isRejectOrReturnStatus(formStatus) {
+		trimmedRejectReason = ""
+	}
+
+	if err := u.repo.UpdateFormStatus(ctx, formID, formStatus, trimmedRejectReason); err != nil {
 		return err
 	}
 
-	_, err = u.logUseCase.CreateLog(ctx, changedBy, &awardformdto.CreateAwardFormLogRequest{
-		FormID:    formID,
-		FieldName: "form_status",
-		OldValue:  strconv.Itoa(oldValue),
-		NewValue:  strconv.Itoa(formStatus),
-	})
-	return err
+	if approvalStatus, shouldLogApproval := mapFormStatusToApprovalStatus(formStatus); shouldLogApproval {
+		log := &models.AwardApprovalLog{
+			FormID:         formID,
+			UserID:         changedBy,
+			ApprovalStatus: approvalStatus,
+			ApprovedAt:     time.Now(),
+		}
+		if err := u.repo.CreateAwardApprovalLog(ctx, log); err != nil {
+			return err
+		}
+	}
+
+	if shouldLogSigned := shouldCreateSignedLog(formStatus); shouldLogSigned {
+		signedLog := &models.AwardSignedLog{
+			FormID:   formID,
+			UserID:   changedBy,
+			SignedAt: time.Now(),
+		}
+		if err := u.repo.CreateAwardSignedLog(ctx, signedLog); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func mapFormStatusToApprovalStatus(formStatus int) (string, bool) {
+	switch formStatus {
+	case 2, 4, 6, 8, 10:
+		return "อนุมัติ", true
+	case 3, 5, 7, 11:
+		return "ปฏิเสธ", true
+	case 9:
+		return "ตีกลับ", true
+	default:
+		return "", false
+	}
+}
+
+func shouldCreateSignedLog(formStatus int) bool {
+	switch formStatus {
+	case 12, 13:
+		return true
+	default:
+		return false
+	}
+}
+
+func isRejectOrReturnStatus(formStatus int) bool {
+	switch formStatus {
+	case 3, 5, 7, 9, 11:
+		return true
+	default:
+		return false
+	}
 }
 
 func (u *awardUseCase) GetAllAwardTypes(ctx context.Context) ([]string, error) {
 	return u.repo.GetAllAwardTypes(ctx)
+}
+
+func (u *awardUseCase) GetApprovalHistory(ctx context.Context, userID uint, campusID int, keyword string, date string, awardType string, operation string, sortBy string, sortOrder string, page int, limit int) (*awardformdto.PaginatedApprovalLogResponse, error) {
+	if userID == 0 {
+		return nil, errors.New("invalid user id")
+	}
+	if campusID == 0 {
+		return nil, errors.New("invalid campus id")
+	}
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 5
+	}
+	if limit > 5 {
+		limit = 5
+	}
+
+	filter := repository.ApprovalLogSearchFilter{
+		UserID:    userID,
+		CampusID:  campusID,
+		Keyword:   strings.TrimSpace(keyword),
+		Date:      strings.TrimSpace(date),
+		AwardType: strings.TrimSpace(awardType),
+		Operation: normalizeOperation(operation),
+		SortBy:    normalizeSortBy(sortBy),
+		SortOrder: normalizeSortOrder(sortOrder),
+		Page:      page,
+		Limit:     limit,
+	}
+
+	rows, total, err := u.repo.GetApprovalHistoryByUserAndCampus(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	responseData := make([]awardformdto.ApprovalLogHistoryResponse, 0, len(rows))
+	for _, row := range rows {
+		responseData = append(responseData, awardformdto.ApprovalLogHistoryResponse{
+			ApprovalLogID:    row.ApprovalLogID,
+			FormID:           row.FormID,
+			ReviewerUserID:   row.ReviewerUserID,
+			Operation:        row.Operation,
+			OperationDate:    row.OperationDate,
+			StudentFirstname: row.StudentFirstname,
+			StudentLastname:  row.StudentLastname,
+			StudentNumber:    row.StudentNumber,
+			AcademicYear:     row.AcademicYear,
+			AwardType:        row.AwardType,
+			CampusID:         row.CampusID,
+		})
+	}
+
+	totalPages := int(total) / limit
+	if int(total)%limit > 0 {
+		totalPages++
+	}
+
+	return &awardformdto.PaginatedApprovalLogResponse{
+		Data: responseData,
+		Pagination: awardformdto.PaginationMeta{
+			CurrentPage: page,
+			TotalPages:  totalPages,
+			TotalItems:  total,
+			Limit:       limit,
+		},
+	}, nil
+}
+
+func (u *awardUseCase) GetApprovalLogsByUserID(ctx context.Context, userID uint) ([]models.AwardApprovalLog, error) {
+	if userID == 0 {
+		return nil, errors.New("invalid user id")
+	}
+	return u.repo.GetApprovalLogsByUserID(ctx, userID)
 }

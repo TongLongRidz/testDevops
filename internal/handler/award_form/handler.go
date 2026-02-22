@@ -16,13 +16,12 @@ import (
 
 type AwardHandler struct {
 	useCase             usecase.AwardUseCase
-	logUseCase          usecase.AwardFormLogUseCase
 	studentService      usecase.StudentService
 	academicYearService usecase.AcademicYearService
 }
 
-func NewAwardHandler(u usecase.AwardUseCase, s usecase.StudentService, ays usecase.AcademicYearService, l usecase.AwardFormLogUseCase) *AwardHandler {
-	return &AwardHandler{useCase: u, logUseCase: l, studentService: s, academicYearService: ays}
+func NewAwardHandler(u usecase.AwardUseCase, s usecase.StudentService, ays usecase.AcademicYearService) *AwardHandler {
+	return &AwardHandler{useCase: u, studentService: s, academicYearService: ays}
 }
 
 func (h *AwardHandler) Submit(c *fiber.Ctx) error {
@@ -57,7 +56,8 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 	var req awardformdto.SubmitAwardRequest
 
 	// ===== ROLE: STUDENT (RoleID = 1) =====
-	if user.RoleID == 1 {
+	switch user.RoleID {
+	case 1:
 		fmt.Println("🎓 Processing STUDENT submission...")
 
 		// Student กรอก:
@@ -141,7 +141,7 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 		req.FormDetail = formDetail
 
 		// ===== ROLE: ORGANIZATION (RoleID = 9) =====
-	} else if user.RoleID == 9 {
+	case 9:
 		fmt.Println("🏢 Processing ORGANIZATION submission...")
 
 		// Organization กรอก:
@@ -278,7 +278,7 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 		}
 		req.FormDetail = formDetail
 
-	} else {
+	default:
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Only Student (RoleID=1) and Organization (RoleID=9) can submit awards",
@@ -412,16 +412,24 @@ func (h *AwardHandler) GetByKeyword(c *fiber.Ctx) error {
 	}
 
 	// ค้นหาและกรองตามวิทยาเขตของ user
+	sortOrder := req.SortOrder
+	if strings.TrimSpace(sortOrder) == "" {
+		sortOrder = req.Arrangement
+	}
+
 	results, err := h.useCase.GetByKeyword(
 		c.UserContext(),
+		user.UserID,
+		user.RoleID,
 		user.CampusID,
 		req.Keyword,
 		req.Date,
 		req.StudentYear,
 		req.AwardType,
+		req.SortBy,
+		sortOrder,
 		req.Page,
 		req.Limit,
-		req.Arrangement,
 	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -454,89 +462,49 @@ func (h *AwardHandler) GetMySubmissions(c *fiber.Ctx) error {
 		})
 	}
 
-	var err error
-	var pagedResults *awardformdto.PaginatedAwardResponse
-	page := 1
-	limit := 4
-
-	yearQuery := c.Query("year")
-	if yearQuery == "" {
-		yearQuery = c.Query("years")
-	}
-
-	pageQuery := c.Query("page")
-	limitQuery := c.Query("limit")
-	if pageQuery != "" {
-		pageValue, convErr := strconv.Atoi(pageQuery)
-		if convErr != nil || pageValue <= 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"status":  "error",
-				"message": "Invalid page parameter",
-			})
-		}
-		page = pageValue
-	}
-	if limitQuery != "" {
-		limitValue, convErr := strconv.Atoi(limitQuery)
-		if convErr != nil || limitValue <= 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"status":  "error",
-				"message": "Invalid limit parameter",
-			})
-		}
-		limit = limitValue
-	}
-
-	var yearList []int
-	if yearQuery != "" {
-		parts := strings.Split(yearQuery, ",")
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-			yearValue, convErr := strconv.Atoi(part)
-			if convErr != nil || yearValue <= 0 {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"status":  "error",
-					"message": "Invalid year parameter",
-				})
-			}
-			yearList = append(yearList, yearValue)
-		}
-		if len(yearList) == 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"status":  "error",
-				"message": "year is required",
-			})
-		}
-	}
-
-	// เช็ค Role และดึงข้อมูลตาม Role
-	switch user.RoleID {
-	case 1: // Student
-		// ดึงการส่งฟอร์มของนักเรียนนี้ (sorted by created_at desc)
-		if len(yearList) > 0 {
-			pagedResults, err = h.useCase.GetAwardsByUserIDPaged(c.UserContext(), user.UserID, yearList, page, limit)
-		} else {
-			pagedResults, err = h.useCase.GetAwardsByUserIDPaged(c.UserContext(), user.UserID, nil, page, limit)
-		}
-
-	case 9: // Organization
-		// ดึงการส่งฟอร์มของ organization นี้ (sorted by created_at desc)
-		if len(yearList) > 0 {
-			pagedResults, err = h.useCase.GetAwardsByUserIDPaged(c.UserContext(), user.UserID, yearList, page, limit)
-		} else {
-			pagedResults, err = h.useCase.GetAwardsByUserIDPaged(c.UserContext(), user.UserID, nil, page, limit)
-		}
-
-	default:
+	// เช็ค Role
+	if user.RoleID != 1 && user.RoleID != 9 {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Only Student and Organization can view submissions",
 		})
 	}
 
+	// รับ year parameter (optional)
+	yearQuery := c.Query("year")
+	var year int
+
+	if yearQuery != "" {
+		// ถ้ามี query param ให้ใช้ค่านั้น
+		yearValue, err := strconv.Atoi(yearQuery)
+		if err != nil || yearValue <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Invalid year parameter",
+			})
+		}
+		year = yearValue
+	} else {
+		// ถ้าไม่มี query param ให้ดึง current active year
+		currentSemester, err := h.academicYearService.GetCurrentSemester(c.UserContext())
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Failed to get current semester: " + err.Error(),
+			})
+		}
+
+		if currentSemester == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"status":  "error",
+				"message": "No active semester found",
+			})
+		}
+		year = int(currentSemester.Year)
+	}
+
+	// ดึงการส่งฟอร์มของ user ในปีการศึกษาที่ระบุ (ทั้ง semester)
+	results, err := h.useCase.GetAwardsByUserIDAndYear(c.UserContext(), user.UserID, year)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status":  "error",
@@ -544,10 +512,13 @@ func (h *AwardHandler) GetMySubmissions(c *fiber.Ctx) error {
 		})
 	}
 
+	if results == nil {
+		results = []awardformdto.AwardFormResponse{}
+	}
+
 	return c.JSON(fiber.Map{
-		"status":     "success",
-		"data":       pagedResults.Data,
-		"pagination": pagedResults.Pagination,
+		"status": "success",
+		"data":   results,
 	})
 }
 
@@ -612,103 +583,6 @@ func (h *AwardHandler) GetMyCurrentSemesterSubmissions(c *fiber.Ctx) error {
 			"academic_year": currentSemester.Year,
 			"semester":      currentSemester.Semester,
 		},
-	})
-}
-
-func (h *AwardHandler) CreateLog(c *fiber.Ctx) error {
-	currentUser := c.Locals("current_user")
-	if currentUser == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"status":  "error",
-			"message": "Unauthorized: User not found",
-		})
-	}
-	user, ok := currentUser.(*models.User)
-	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"status":  "error",
-			"message": "Invalid user data",
-		})
-	}
-
-	formID, err := strconv.Atoi(c.Params("formId"))
-	if err != nil || formID <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"status":  "error",
-			"message": "Invalid formId",
-		})
-	}
-
-	var req awardformdto.CreateAwardFormLogRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"status":  "error",
-			"message": "Invalid request body",
-		})
-	}
-	if req.FieldName == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"status":  "error",
-			"message": "field_name is required",
-		})
-	}
-	req.FormID = uint(formID)
-
-	log, err := h.logUseCase.CreateLog(c.UserContext(), user.UserID, &req)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"status":  "error",
-			"message": err.Error(),
-		})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"status": "success",
-		"data": awardformdto.AwardFormLogResponse{
-			LogID:     log.LogID,
-			FormID:    log.FormID,
-			FieldName: log.FieldName,
-			OldValue:  log.OldValue,
-			NewValue:  log.NewValue,
-			ChangedBy: log.ChangedBy,
-			CreatedAt: log.CreatedAt,
-		},
-	})
-}
-
-func (h *AwardHandler) GetLogsByFormID(c *fiber.Ctx) error {
-	formID, err := strconv.Atoi(c.Params("formId"))
-	if err != nil || formID <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"status":  "error",
-			"message": "Invalid formId",
-		})
-	}
-
-	logs, err := h.logUseCase.GetLogsByFormID(c.UserContext(), uint(formID))
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"status":  "error",
-			"message": err.Error(),
-		})
-	}
-
-	response := make([]awardformdto.AwardFormLogResponse, 0, len(logs))
-	for _, log := range logs {
-		response = append(response, awardformdto.AwardFormLogResponse{
-			LogID:     log.LogID,
-			FormID:    log.FormID,
-			FieldName: log.FieldName,
-			OldValue:  log.OldValue,
-			NewValue:  log.NewValue,
-			ChangedBy: log.ChangedBy,
-			CreatedAt: log.CreatedAt,
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"status": "success",
-		"data":   response,
 	})
 }
 
@@ -828,7 +702,7 @@ func (h *AwardHandler) UpdateFormStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := h.useCase.UpdateFormStatus(c.UserContext(), uint(formID), req.FormStatusID, user.UserID); err != nil {
+	if err := h.useCase.UpdateFormStatus(c.UserContext(), uint(formID), req.FormStatusID, req.RejectReason, user.UserID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"status":  "error",
 			"message": err.Error(),
@@ -838,6 +712,63 @@ func (h *AwardHandler) UpdateFormStatus(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status":  "success",
 		"message": "form_status updated",
+	})
+}
+
+func (h *AwardHandler) GetMyApprovalLogs(c *fiber.Ctx) error {
+	currentUser := c.Locals("current_user")
+	if currentUser == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Unauthorized: User not found",
+		})
+	}
+
+	user, ok := currentUser.(*models.User)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid user data",
+		})
+	}
+
+	var req awardformdto.SearchApprovalLogRequest
+	if err := c.QueryParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid query parameters",
+		})
+	}
+
+	sortOrder := req.SortOrder
+	if strings.TrimSpace(sortOrder) == "" {
+		sortOrder = req.Arrangement
+	}
+
+	logs, err := h.useCase.GetApprovalHistory(
+		c.UserContext(),
+		user.UserID,
+		user.CampusID,
+		req.Keyword,
+		req.Date,
+		req.AwardType,
+		req.Operation,
+		req.SortBy,
+		sortOrder,
+		req.Page,
+		req.Limit,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status":     "success",
+		"data":       logs.Data,
+		"pagination": logs.Pagination,
 	})
 }
 
