@@ -4,10 +4,10 @@ import (
 	"backend/config"
 	academicyear "backend/internal/handler/academic_year"
 	"backend/internal/handler/auth"
+	awardtype "backend/internal/handler/award_type"
 	"backend/internal/handler/campus"
 	"backend/internal/handler/department"
 	"backend/internal/handler/faculty"
-	awardtype "backend/internal/handler/award_type"
 	formstatus "backend/internal/handler/form_status"
 	"backend/internal/handler/role"
 	"backend/internal/handler/student"
@@ -20,6 +20,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/swagger"
 	"gorm.io/gorm"
 )
 
@@ -75,6 +76,8 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	awardTypeHandler := awardtype.NewAwardTypeHandler(awardTypeService)
 
 	// --- 5. Routing Definition ---
+	app.Get("/swagger/*", swagger.HandlerDefault) // Swagger route
+
 	apiGroup := app.Group("/api")
 
 	// --- Auth Routes ---
@@ -141,6 +144,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	userGroup.Get("/", userHandler.GetAllUsersByCampus)      // GET /users (ดึง user ตามวิทยาเขตของคนที่ login)
 	userGroup.Get("/:id", userHandler.GetUserByID)           // GET /users/:id
 	userGroup.Put("/update/:id", userHandler.UpdateUserByID) // PUT /users/:id
+	userGroup.Post("/", userHandler.CreateUser)              // POST /users (Create User)
 
 	// --- Campus Routes ---
 	campusGroup := apiGroup.Group("/campus")

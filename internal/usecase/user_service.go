@@ -8,12 +8,16 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type UserService interface {
 	GetUserByID(ctx context.Context, userID uint) (*models.User, error)
 	UpdateUserByID(ctx context.Context, userID uint, req *userdto.EditUserRequest) (*models.User, error)
 	GetAllUsersByCampus(ctx context.Context, campusID int) ([]models.User, error)
+	CreateUser(ctx context.Context, req *userdto.CreateUserRequest) (*models.User, error)
 }
 
 type userService struct {
@@ -92,4 +96,56 @@ func (s *userService) GetAllUsersByCampus(ctx context.Context, campusID int) ([]
 		return nil, err
 	}
 	return users, nil
+}
+
+// CreateUser สร้าง user ใหม่ (สำหรับ Role 5)
+func (s *userService) CreateUser(ctx context.Context, req *userdto.CreateUserRequest) (*models.User, error) {
+	// 1. ตรวจสอบ field ที่จำเป็น (ทำใน handler หรือ validate struct แล้ว แต่ check อีกทีได้)
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	if email == "" {
+		return nil, errors.New("email is required")
+	}
+
+	// 2. ตรวจสอบว่ามี Email นี้ซ้ำหรือไม่
+	existing, err := s.repo.GetUserByEmail(email)
+	if err == nil && existing != nil {
+		return nil, errors.New("email already registered")
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	// 3. ตรวจสอบ Password Match
+	if req.Password != req.ConfirmPassword {
+		return nil, errors.New("passwords do not match")
+	}
+
+	// 4. Hash Password
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. เตรียม Model
+	user := &models.User{
+		Email:          email,
+		HashedPassword: string(hashed),
+		Prefix:         strings.TrimSpace(req.Prefix),
+		Firstname:      strings.TrimSpace(req.Firstname),
+		Lastname:       strings.TrimSpace(req.Lastname),
+		RoleID:         req.RoleID,
+		CampusID:       req.CampusID,	
+		Provider:       "manual",
+		IsFirstLogin:   true, // ให้ user ใหม่ต้อง setup profile อีกที หรือแล้วแต่ requirement
+		CreatedAt:      time.Now(),
+		LatestUpdate:   time.Now(),
+	}
+	// ถ้าต้องการ ImagePath default
+	// user.ImagePath = "..."
+
+	// 6. Save to DB
+	if err := s.repo.UpsertUser(user); err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }

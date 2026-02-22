@@ -2,7 +2,7 @@ package user
 
 import (
 	userdto "backend/internal/dto/user_dto"
-	// "backend/internal/models"
+	"backend/internal/models"
 	"backend/internal/usecase"
 	"strconv"
 
@@ -17,7 +17,18 @@ func NewUserHandler(us usecase.UserService) *UserHandler {
 	return &UserHandler{UserService: us}
 }
 
-// GET /users/:id
+// GetUserByID fetches a user by their ID
+// @Summary      Get a user by ID
+// @Description  Get a detailed user object by providing a valid user ID.
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Param        id   path      int  true  "User ID"
+// @Success      200  {object}  userdto.UserResponse
+// @Failure      400  {object}  map[string]interface{}
+// @Failure      404  {object}  map[string]interface{}
+// @Security     BearerAuth
+// @Router       /users/{id} [get]
 func (h *UserHandler) GetUserByID(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id64, err := strconv.ParseUint(idStr, 10, 32)
@@ -49,7 +60,7 @@ func (h *UserHandler) GetUserByID(c *fiber.Ctx) error {
 // GET /users (ดึง user ตามวิทยาเขตของคนที่ login อยู่)
 func (h *UserHandler) GetAllUsersByCampus(c *fiber.Ctx) error {
 	// ดึง user ข้อมูลจาก context (จาก middleware)
-	currentUser, ok := c.Locals("user").(*userdto.UserResponse)
+	currentUser, ok := c.Locals("current_user").(*models.User)
 	if !ok || currentUser == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 	}
@@ -111,5 +122,47 @@ func (h *UserHandler) UpdateUserByID(c *fiber.Ctx) error {
 		IsFirstLogin: updated.IsFirstLogin,
 		CreatedAt:    updated.CreatedAt,
 		LatestUpdate: updated.LatestUpdate,
+	})
+}
+
+// POST /users/create (สำหรับ Role 5: Student Development)
+func (h *UserHandler) CreateUser(c *fiber.Ctx) error {
+	// 1. ตรวจสอบ Permission
+	currentUser, ok := c.Locals("current_user").(*models.User)
+	if !ok || currentUser == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	// Double check role
+	if currentUser.RoleID != 5 { // 5 = Student Development
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
+	}
+
+	// 2. Parse Body
+	var req userdto.CreateUserRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
+	}
+
+	// 3. Call Service
+	newUser, err := h.UserService.CreateUser(c.Context(), &req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// 4. Response
+	return c.Status(fiber.StatusCreated).JSON(userdto.UserResponse{
+		UserID:       newUser.UserID,
+		Prefix:       newUser.Prefix,
+		Firstname:    newUser.Firstname,
+		Lastname:     newUser.Lastname,
+		Email:        newUser.Email,
+		ImagePath:    newUser.ImagePath,
+		Provider:     newUser.Provider,
+		RoleID:       newUser.RoleID,
+		CampusID:     newUser.CampusID,
+		IsFirstLogin: newUser.IsFirstLogin,
+		CreatedAt:    newUser.CreatedAt,
+		LatestUpdate: newUser.LatestUpdate,
 	})
 }

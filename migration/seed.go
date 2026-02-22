@@ -4,6 +4,7 @@ import (
 	"backend/internal/models"
 	"fmt"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -253,3 +254,33 @@ func SeedFacultyAndDepartments(db *gorm.DB) error {
 }
 
 func SeedAdmin(db *gorm.DB) error { return nil }
+
+func SeedStudentDevelopment(db *gorm.DB) error {
+	// สร้างอีเมลเริ่มต้นสำหรับกองพัฒน์
+	email := "student_dev@ku.th"
+
+	var existing models.User
+	if err := db.Where("email = ?", email).First(&existing).Error; err == nil {
+		return nil // มี user นี้อยู่แล้ว
+	}
+
+	// เข้ารหัสพาสเวิร์ด (เช่นใช้ 'password')
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	user := models.User{
+		Prefix:         "นางสาว",
+		Firstname:      "กองพัฒนานิสิต",
+		Lastname:       "มหาวิทยาลัยเกษตรศาสตร์",
+		Email:          email,
+		HashedPassword: string(hashedPassword),
+		Provider:       "manual",
+		RoleID:         5, // Role: Student Development
+		CampusID:       1, // บางเขน
+		IsFirstLogin:   false,
+	}
+
+	return db.Create(&user).Error
+}

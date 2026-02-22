@@ -1,0 +1,75 @@
+basePath: /api
+definitions:
+  userdto.UserResponse:
+    properties:
+      campus_id:
+        type: integer
+      created_at:
+        type: string
+      email:
+        type: string
+      firstname:
+        type: string
+      image_path:
+        type: string
+      is_first_login:
+        type: boolean
+      lastname:
+        type: string
+      latest_update:
+        type: string
+      prefix:
+        type: string
+      provider:
+        type: string
+      role_id:
+        type: integer
+      user_id:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: This is the API documentation for the Backend service.
+  title: Backend API
+  version: "1.0"
+paths:
+  /users/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get a detailed user object by providing a valid user ID.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/userdto.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get a user by ID
+      tags:
+      - users
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

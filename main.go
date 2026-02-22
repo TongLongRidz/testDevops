@@ -10,9 +10,20 @@ import (
 	"os"
 	"path/filepath"
 
+	_ "backend/docs" // load swagger docs
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 )
+
+// @title           Backend API
+// @version         1.0
+// @description     This is the API documentation for the Backend service.
+// @host            localhost:8080
+// @BasePath        /api
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 
 func main() {
 	// 1. โหลดไฟล์ .env (สำหรับค่า Client ID, Secret และ DB Config)
@@ -91,6 +102,13 @@ func main() {
 		log.Fatal("Seeding AwardType failed: ", err)
 	}
 	fmt.Println("✓ AwardType seeded successfully")
+
+	// 2.11 Seed Student Development User ลงฐานข้อมูล
+	fmt.Println("Seeding Student Development User data...")
+	if err := migration.SeedStudentDevelopment(db); err != nil {
+		log.Fatal("Seeding Student Development User failed: ", err)
+	}
+	fmt.Println("✓ Student Development User seeded successfully")
 
 	// 3. ตั้งค่า Fiber App
 	app := fiber.New(fiber.Config{
