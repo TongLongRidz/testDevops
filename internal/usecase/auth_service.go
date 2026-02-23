@@ -25,9 +25,16 @@ type AuthService interface {
 	ProcessGoogleLogin(code string) (*models.User, error)
 	IssueToken(user *models.User) (string, error)
 	Register(req *authDto.RegisterRequest) (*models.User, error)
+	CreateAccount(ctx context.Context, req *authDto.CreateAccountRequest) (*models.User, error)
 	AuthenticateAndToken(ctx context.Context, email, password string) (string, *models.User, error)
 
 	GetUserByID(ctx context.Context, userID uint) (*models.User, error)
+	GetHeadOfDepartmentByUserID(ctx context.Context, userID uint) (*models.HeadOfDepartment, error)
+	GetAssociateDeanByUserID(ctx context.Context, userID uint) (*models.AssociateDean, error)
+	GetDeanByUserID(ctx context.Context, userID uint) (*models.Dean, error)
+	GetStudentDevelopmentByUserID(ctx context.Context, userID uint) (*models.StudentDevelopment, error)
+	GetCommitteeByUserID(ctx context.Context, userID uint) (*models.Committee, error)
+	GetChancellorByUserID(ctx context.Context, userID uint) (*models.Chancellor, error)
 	UpdateUser(ctx context.Context, userID uint, req *authDto.UpdateUserRequest) (*models.User, error)
 	CompleteFirstLogin(ctx context.Context, userID uint, req *authDto.FirstLoginRequest, imagePath string) (*models.User, *models.Student, error)
 }
@@ -38,6 +45,7 @@ type authService struct {
 	repo        repository.UserRepository
 	studentRepo repository.StudentRepository
 	orgRepo     repository.OrganizationRepository
+	roleRepo    repository.RoleProfileRepository
 	googleCfg   *config.GoogleOAuthConfig
 }
 
@@ -49,8 +57,8 @@ func NewAuthUseWithStudent(repo repository.UserRepository, studentRepo repositor
 	return &authService{repo: repo, studentRepo: studentRepo, googleCfg: cfg}
 }
 
-func NewAuthUsecaseWithRepos(repo repository.UserRepository, studentRepo repository.StudentRepository, orgRepo repository.OrganizationRepository, cfg *config.GoogleOAuthConfig) AuthService {
-	return &authService{repo: repo, studentRepo: studentRepo, orgRepo: orgRepo, googleCfg: cfg}
+func NewAuthUsecaseWithRepos(repo repository.UserRepository, studentRepo repository.StudentRepository, orgRepo repository.OrganizationRepository, roleRepo repository.RoleProfileRepository, cfg *config.GoogleOAuthConfig) AuthService {
+	return &authService{repo: repo, studentRepo: studentRepo, orgRepo: orgRepo, roleRepo: roleRepo, googleCfg: cfg}
 }
 
 // determineRoleByEmail กำหนด role_id ตาม email domain
@@ -58,7 +66,7 @@ func determineRoleByEmail(email string) int {
 	if strings.HasSuffix(strings.ToLower(email), "@ku.th") {
 		return 1 // Student
 	}
-	return 9 // Organization
+	return 8 // Organization
 }
 
 func (u *authService) GetGoogleLoginURL() string {
@@ -135,7 +143,7 @@ func (u *authService) ProcessGoogleLogin(code string) (*models.User, error) {
 			if err := u.studentRepo.Create(context.Background(), student); err != nil {
 				return nil, err
 			}
-		} else if roleID == 9 && u.orgRepo != nil {
+		} else if roleID == 8 && u.orgRepo != nil {
 			org := &models.Organization{
 				UserID:                  user.UserID,
 				OrganizationName:        "",
@@ -232,7 +240,7 @@ func (u *authService) Register(req *authDto.RegisterRequest) (*models.User, erro
 		}
 		// ไม่ return error ถ้าสร้าง student ไม่สำเร็จ เพื่อให้ register สำเร็จ
 		_ = u.studentRepo.Create(context.Background(), student)
-	} else if roleID == 9 && u.orgRepo != nil {
+	} else if roleID == 8 && u.orgRepo != nil {
 		org := &models.Organization{
 			UserID:                  user.UserID,
 			OrganizationName:        "",
@@ -241,6 +249,138 @@ func (u *authService) Register(req *authDto.RegisterRequest) (*models.User, erro
 			OrganizationPhoneNumber: "",
 		}
 		_ = u.orgRepo.Create(context.Background(), org)
+	}
+
+	return user, nil
+}
+
+func (u *authService) CreateAccount(ctx context.Context, req *authDto.CreateAccountRequest) (*models.User, error) {
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	if email == "" || req.Password == "" {
+		return nil, fmt.Errorf("email and password required")
+	}
+	if req.Password != req.ConfirmPassword {
+		return nil, fmt.Errorf("passwords do not match")
+	}
+	if req.RoleID < 1 || req.RoleID > 8 {
+		return nil, fmt.Errorf("invalid role_id")
+	}
+	if req.CampusID <= 0 {
+		return nil, fmt.Errorf("campus_id is required")
+	}
+
+	if existing, err := u.repo.GetUserByEmail(email); err == nil && existing != nil {
+		return nil, fmt.Errorf("email already registered")
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	isFirstLogin := req.RoleID == 1 || req.RoleID == 8
+
+	user := &models.User{
+		Email:          email,
+		HashedPassword: string(hashed),
+		Provider:       "manual",
+		RoleID:         req.RoleID,
+		CampusID:       req.CampusID,
+		Prefix:         strings.TrimSpace(req.Prefix),
+		Firstname:      strings.TrimSpace(req.Firstname),
+		Lastname:       strings.TrimSpace(req.Lastname),
+		IsFirstLogin:   isFirstLogin,
+		CreatedAt:      time.Now(),
+		LatestUpdate:   time.Now(),
+	}
+
+	if err := u.repo.UpsertUser(user); err != nil {
+		return nil, err
+	}
+
+	updatedUser, err := u.repo.UpdateUserFields(ctx, user.UserID, map[string]interface{}{
+		"is_first_login": isFirstLogin,
+		"latest_update":  time.Now(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	user = updatedUser
+
+	switch req.RoleID {
+	case 1:
+		if u.studentRepo == nil {
+			return nil, errors.New("student repository not configured")
+		}
+		studentNumber := strings.TrimSpace(req.StudentNumber)
+		if studentNumber == "" {
+			return nil, errors.New("student_number is required")
+		}
+		if req.FacultyID == 0 || req.DepartmentID == 0 {
+			return nil, errors.New("faculty_id and department_id are required")
+		}
+		if err := validateStudentNumber(studentNumber); err != nil {
+			return nil, err
+		}
+		student := &models.Student{
+			UserID:        user.UserID,
+			StudentNumber: studentNumber,
+			FacultyID:     req.FacultyID,
+			DepartmentID:  req.DepartmentID,
+		}
+		if err := u.studentRepo.Create(ctx, student); err != nil {
+			return nil, err
+		}
+	case 8:
+		if u.orgRepo == nil {
+			return nil, errors.New("organization repository not configured")
+		}
+		orgName := strings.TrimSpace(req.OrganizationName)
+		if orgName == "" {
+			return nil, errors.New("organization_name is required")
+		}
+		org := &models.Organization{
+			UserID:                  user.UserID,
+			OrganizationName:        orgName,
+			OrganizationType:        strings.TrimSpace(req.OrganizationType),
+			OrganizationLocation:    strings.TrimSpace(req.OrganizationLocation),
+			OrganizationPhoneNumber: strings.TrimSpace(req.OrganizationPhone),
+		}
+		if err := u.orgRepo.Create(ctx, org); err != nil {
+			return nil, err
+		}
+	default:
+		if u.roleRepo == nil {
+			return nil, errors.New("role profile repository not configured")
+		}
+
+		if req.RoleID == 2 {
+			if req.FacultyID == 0 || req.DepartmentID == 0 {
+				return nil, errors.New("faculty_id and department_id are required for head of department")
+			}
+		}
+		if req.RoleID == 3 {
+			if req.FacultyID == 0 {
+				return nil, errors.New("faculty_id is required for associate dean")
+			}
+		}
+		if req.RoleID == 4 {
+			if req.FacultyID == 0 {
+				return nil, errors.New("faculty_id is required for dean")
+			}
+		}
+
+		if err := u.roleRepo.CreateByRole(ctx, req.RoleID, user.UserID, req.FacultyID, req.DepartmentID); err != nil {
+			return nil, err
+		}
+	}
+
+	if req.RoleID == 6 {
+		if err := u.repo.SetCommitteeChairman(ctx, user.UserID, req.IsChairman); err != nil {
+			return nil, err
+		}
 	}
 
 	return user, nil
@@ -304,6 +444,48 @@ func (u *authService) GetUserByID(ctx context.Context, userID uint) (*models.Use
 	}
 
 	return user, nil
+}
+
+func (u *authService) GetHeadOfDepartmentByUserID(ctx context.Context, userID uint) (*models.HeadOfDepartment, error) {
+	if u.roleRepo == nil {
+		return nil, errors.New("role repository not configured")
+	}
+	return u.roleRepo.GetHeadOfDepartmentByUserID(ctx, userID)
+}
+
+func (u *authService) GetAssociateDeanByUserID(ctx context.Context, userID uint) (*models.AssociateDean, error) {
+	if u.roleRepo == nil {
+		return nil, errors.New("role repository not configured")
+	}
+	return u.roleRepo.GetAssociateDeanByUserID(ctx, userID)
+}
+
+func (u *authService) GetDeanByUserID(ctx context.Context, userID uint) (*models.Dean, error) {
+	if u.roleRepo == nil {
+		return nil, errors.New("role repository not configured")
+	}
+	return u.roleRepo.GetDeanByUserID(ctx, userID)
+}
+
+func (u *authService) GetStudentDevelopmentByUserID(ctx context.Context, userID uint) (*models.StudentDevelopment, error) {
+	if u.roleRepo == nil {
+		return nil, errors.New("role repository not configured")
+	}
+	return u.roleRepo.GetStudentDevelopmentByUserID(ctx, userID)
+}
+
+func (u *authService) GetCommitteeByUserID(ctx context.Context, userID uint) (*models.Committee, error) {
+	if u.roleRepo == nil {
+		return nil, errors.New("role repository not configured")
+	}
+	return u.roleRepo.GetCommitteeByUserID(ctx, userID)
+}
+
+func (u *authService) GetChancellorByUserID(ctx context.Context, userID uint) (*models.Chancellor, error) {
+	if u.roleRepo == nil {
+		return nil, errors.New("role repository not configured")
+	}
+	return u.roleRepo.GetChancellorByUserID(ctx, userID)
 }
 
 // UpdateUser อัพเดทข้อมูล user
@@ -443,7 +625,7 @@ func (u *authService) CompleteFirstLogin(ctx context.Context, userID uint, req *
 
 		return updatedUser, student, nil
 
-	case 9: // Organization
+	case 8: // Organization
 		if u.orgRepo == nil {
 			return nil, nil, errors.New("organization repository not configured")
 		}

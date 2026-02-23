@@ -16,10 +16,10 @@ func SeedFormStatus(db *gorm.DB) error {
 		{FormStatusName: "ปฏิเสธโดยรองคณบดี"},
 		{FormStatusName: "อนุมัติโดยคณบดี"}, // ส่งต่อให้กองพัฒนานิสิต
 		{FormStatusName: "ปฏิเสธโดยคณบดี"},
-		{FormStatusName: "อนุมัติโดยกองพัฒนานิสิต"}, // ส่งต่อให้คณะกรรมการ
-		{FormStatusName: "ตีกลับโดยคณะกรรมการ"}, // ให้นิสิตแก้ให้เสร็จแล้วส่งใหม่ กลับไป status ก่อนหน้า [ลูปก่อนหน้ากับอันนี้จนกว่าจะผ่าน]
-		{FormStatusName: "อนุมัติโดยคณะกรรมการ"}, // โหวตผ่านเกินครึ่ง
-		{FormStatusName: "ปฏิเสธโดยคณะกรรมการ"}, // โหวตไม่ผ่านเกินครึ่ง (หรือไม่ถึงในเวลา?)
+		{FormStatusName: "อนุมัติโดยกองพัฒนานิสิต"},  // ส่งต่อให้คณะกรรมการ
+		{FormStatusName: "ตีกลับโดยกองพัฒนานิสิต"},      // ให้นิสิตแก้ให้เสร็จแล้วส่งใหม่ กลับไป status ก่อนหน้า [ลูปก่อนหน้ากับอันนี้จนกว่าจะผ่าน]
+		{FormStatusName: "อนุมัติโดยคณะกรรมการ"},     // โหวตผ่านเกินครึ่ง
+		{FormStatusName: "ปฏิเสธโดยคณะกรรมการ"},      // โหวตไม่ผ่านเกินครึ่ง (หรือไม่ถึงในเวลา?)
 		{FormStatusName: "ลงนามโดยประธานคณะกรรมการ"}, // ส่งต่อให้อธิการบดี
 		{FormStatusName: "ลงนามโดยอธิการบดี"},
 	}
@@ -63,20 +63,32 @@ func SeedRole(db *gorm.DB) error {
 		{RoleName: "Dean", RoleNameTH: "คณบดี"},
 		{RoleName: "Student Development", RoleNameTH: "กองพัฒนานิสิต"},
 		{RoleName: "Committee", RoleNameTH: "คณะกรรมการ"},
-		{RoleName: "Committee Chairman", RoleNameTH: "ประธานคณะกรรมการ"},
 		{RoleName: "Chancellor", RoleNameTH: "อธิการบดี"},
 		{RoleName: "Organization", RoleNameTH: "หน่วยงานภายนอก"},
 	}
 
-	// ตรวจสอบว่า Role มีข้อมูลอยู่แล้วหรือไม่
-	var count int64
-	db.Model(&models.Role{}).Count(&count)
-	if count > 0 {
-		return nil // ข้อมูล Role มีอยู่แล้ว ไม่ต้องสร้างใหม่
+	var existingRoles []models.Role
+	if err := db.Find(&existingRoles).Error; err != nil {
+		return err
 	}
 
-	// บันทึก Role ลงฐานข้อมูล
-	return db.CreateInBatches(roles, 100).Error
+	existingByName := make(map[string]struct{}, len(existingRoles))
+	for _, role := range existingRoles {
+		existingByName[role.RoleName] = struct{}{}
+	}
+
+	var newRoles []models.Role
+	for _, role := range roles {
+		if _, exists := existingByName[role.RoleName]; !exists {
+			newRoles = append(newRoles, role)
+		}
+	}
+
+	if len(newRoles) == 0 {
+		return nil
+	}
+
+	return db.CreateInBatches(newRoles, 100).Error
 }
 
 func SeedFacultyAndDepartments(db *gorm.DB) error {

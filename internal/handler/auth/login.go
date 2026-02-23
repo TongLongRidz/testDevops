@@ -125,8 +125,8 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 		}
 	}
 
-	// ถ้า RoleID = 9 (Organization) ให้ดึงข้อมูล Organization ด้วย
-	if fullUser.RoleID == 9 && h.OrganizationService != nil {
+	// ถ้า RoleID = 8 (Organization) ให้ดึงข้อมูล Organization ด้วย
+	if fullUser.RoleID == 8 && h.OrganizationService != nil {
 		org, err := h.OrganizationService.GetByUserID(c.Context(), fullUser.UserID)
 		if err == nil && org != nil {
 			response.OrganizationData = &authDto.OrganizationMeData{
@@ -135,6 +135,72 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 				OrganizationType:     org.OrganizationType,
 				OrganizationLocation: org.OrganizationLocation,
 				OrganizationPhone:    org.OrganizationPhoneNumber,
+			}
+		}
+	}
+
+	if fullUser.RoleID == 2 {
+		hod, err := h.AuthService.GetHeadOfDepartmentByUserID(c.Context(), fullUser.UserID)
+		if err == nil && hod != nil {
+			response.HeadOfDepartmentData = &authDto.HeadOfDepartmentMeData{
+				HodID:        hod.HodID,
+				UserID:       hod.UserID,
+				FacultyID:    hod.FacultyID,
+				DepartmentID: hod.DepartmentID,
+			}
+		}
+	}
+
+	if fullUser.RoleID == 3 {
+		ad, err := h.AuthService.GetAssociateDeanByUserID(c.Context(), fullUser.UserID)
+		if err == nil && ad != nil {
+			response.AssociateDeanData = &authDto.AssociateDeanMeData{
+				AdID:      ad.AdID,
+				UserID:    ad.UserID,
+				AdCode:    ad.AdCode,
+				FacultyID: ad.FacultyID,
+			}
+		}
+	}
+
+	if fullUser.RoleID == 4 {
+		dean, err := h.AuthService.GetDeanByUserID(c.Context(), fullUser.UserID)
+		if err == nil && dean != nil {
+			response.DeanData = &authDto.DeanMeData{
+				DID:       dean.DID,
+				UserID:    dean.UserID,
+				FacultyID: dean.FacultyID,
+			}
+		}
+	}
+
+	if fullUser.RoleID == 5 {
+		sd, err := h.AuthService.GetStudentDevelopmentByUserID(c.Context(), fullUser.UserID)
+		if err == nil && sd != nil {
+			response.StudentDevelopmentData = &authDto.StudentDevelopmentMeData{
+				SdID:   sd.SdID,
+				UserID: sd.UserID,
+			}
+		}
+	}
+
+	if fullUser.RoleID == 6 {
+		com, err := h.AuthService.GetCommitteeByUserID(c.Context(), fullUser.UserID)
+		if err == nil && com != nil {
+			response.CommitteeData = &authDto.CommitteeMeData{
+				ComID:      com.ComID,
+				UserID:     com.UserID,
+				IsChairman: com.IsChairman,
+			}
+		}
+	}
+
+	if fullUser.RoleID == 7 {
+		ch, err := h.AuthService.GetChancellorByUserID(c.Context(), fullUser.UserID)
+		if err == nil && ch != nil {
+			response.ChancellorData = &authDto.ChancellorMeData{
+				ChancellorID: ch.ChancellorID,
+				UserID:       ch.UserID,
 			}
 		}
 	}
@@ -273,7 +339,7 @@ func (h *AuthHandler) FirstLogin(c *fiber.Ctx) error {
 
 		imagePath = "/" + filepath.ToSlash(savePath)
 
-	case 9: // Organization
+	case 8: // Organization
 		orgName := strings.TrimSpace(c.FormValue("organization_name"))
 		if orgName == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization_name is required for organization"})
@@ -347,8 +413,8 @@ func (h *AuthHandler) FirstLogin(c *fiber.Ctx) error {
 		}
 	}
 
-	// ถ้า RoleID = 9 (Organization) ให้ดึงข้อมูล Organization ด้วย
-	if updatedUser.RoleID == 9 && h.OrganizationService != nil {
+	// ถ้า RoleID = 8 (Organization) ให้ดึงข้อมูล Organization ด้วย
+	if updatedUser.RoleID == 8 && h.OrganizationService != nil {
 		org, err := h.OrganizationService.GetByUserID(c.Context(), updatedUser.UserID)
 		if err == nil && org != nil {
 			response.OrganizationData = &authDto.OrganizationMeData{

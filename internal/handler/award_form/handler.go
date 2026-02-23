@@ -140,8 +140,8 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 		}
 		req.FormDetail = formDetail
 
-		// ===== ROLE: ORGANIZATION (RoleID = 9) =====
-	case 9:
+		// ===== ROLE: ORGANIZATION (RoleID = 8) =====
+		case 8:
 		fmt.Println("🏢 Processing ORGANIZATION submission...")
 
 		// Organization กรอก:

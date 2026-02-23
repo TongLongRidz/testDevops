@@ -9,8 +9,8 @@ type RegisterRequest struct {
 	ConfirmPassword string `json:"confirmPassword" validate:"required,eqfield=Password"`
 }
 
-// RegisterWithRoleRequest ใช้สำหรับสร้าง account ที่กำหนด role ได้
-type RegisterWithRoleRequest struct {
+// CreateAccountRequest ใช้สำหรับสร้าง account ที่กำหนด role ได้
+type CreateAccountRequest struct {
 	Email           string `json:"email" validate:"required,email"`
 	Password        string `json:"password" validate:"required,min=6"`
 	ConfirmPassword string `json:"confirmPassword" validate:"required,eqfield=Password"`
@@ -24,8 +24,12 @@ type RegisterWithRoleRequest struct {
 	StudentNumber string `json:"student_number"`
 	FacultyID     uint   `json:"faculty_id"`
 	DepartmentID  uint   `json:"department_id"`
-	AdCode        string `json:"ad_code"`
-	IsChairman    *bool  `json:"is_chairman"`
+	IsChairman    bool   `json:"is_chairman"`
+
+	OrganizationName     string `json:"organization_name"`
+	OrganizationType     string `json:"organization_type"`
+	OrganizationLocation string `json:"organization_location"`
+	OrganizationPhone    string `json:"organization_phone"`
 }
 
 // LoginRequest ใช้สำหรับรับข้อมูลตอนเข้าสู่ระบบด้วย Email/Password
@@ -73,6 +77,12 @@ type MeResponse struct {
 
 	StudentData      *StudentMeData      `json:"student_data,omitempty"`
 	OrganizationData *OrganizationMeData `json:"organization_data,omitempty"`
+	HeadOfDepartmentData  *HeadOfDepartmentMeData  `json:"head_of_department_data,omitempty"`
+	AssociateDeanData     *AssociateDeanMeData     `json:"associate_dean_data,omitempty"`
+	DeanData              *DeanMeData              `json:"dean_data,omitempty"`
+	StudentDevelopmentData *StudentDevelopmentMeData `json:"student_development_data,omitempty"`
+	CommitteeData         *CommitteeMeData         `json:"committee_data,omitempty"`
+	ChancellorData        *ChancellorMeData        `json:"chancellor_data,omitempty"`
 }
 
 type StudentMeData struct {
@@ -88,6 +98,42 @@ type OrganizationMeData struct {
 	OrganizationType     string `json:"organization_type"`
 	OrganizationLocation string `json:"organization_location"`
 	OrganizationPhone    string `json:"organization_phone"`
+}
+
+type HeadOfDepartmentMeData struct {
+	HodID        uint `json:"hod_id"`
+	UserID       uint `json:"user_id"`
+	FacultyID    uint `json:"faculty_id"`
+	DepartmentID uint `json:"department_id"`
+}
+
+type AssociateDeanMeData struct {
+	AdID      uint   `json:"ad_id"`
+	UserID    uint   `json:"user_id"`
+	AdCode    string `json:"ad_code"`
+	FacultyID uint   `json:"faculty_id"`
+}
+
+type DeanMeData struct {
+	DID       uint `json:"d_id"`
+	UserID    uint `json:"user_id"`
+	FacultyID uint `json:"faculty_id"`
+}
+
+type StudentDevelopmentMeData struct {
+	SdID   uint `json:"sd_id"`
+	UserID uint `json:"user_id"`
+}
+
+type CommitteeMeData struct {
+	ComID      uint `json:"com_id"`
+	UserID     uint `json:"user_id"`
+	IsChairman bool `json:"is_chairman"`
+}
+
+type ChancellorMeData struct {
+	ChancellorID uint `json:"chancellor_id"`
+	UserID       uint `json:"user_id"`
 }
 
 // UpdateUserRequest ใช้สำหรับอัพเดทข้อมูล current user

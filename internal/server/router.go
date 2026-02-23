@@ -39,13 +39,14 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	departmentRepo := repository.NewDepartmentRepository(db)
 	studentRepo := repository.NewStudentRepository(db)
 	organizationRepo := repository.NewOrganizationRepository(db)
+	roleProfileRepo := repository.NewRoleProfileRepository(db)
 	campusRepo := repository.NewCampusRepository(db)
 	roleRepo := repository.NewRoleRepository(db)
 	formStatusRepo := repository.NewFormStatusRepository(db)
 
 	// --- 3. Usecase Layer (Business Logic) ---
 	// ส่ง Repository และ Config เข้าไปใน Usecase
-	authService := usecase.NewAuthUsecaseWithRepos(userRepo, studentRepo, organizationRepo, googleConfig)
+	authService := usecase.NewAuthUsecaseWithRepos(userRepo, studentRepo, organizationRepo, roleProfileRepo, googleConfig)
 	academicYearService := usecase.NewAcademicYearService(academicYearRepo)
 	studentService := usecase.NewStudentService(studentRepo)
 	organizationService := usecase.NewOrganizationService(organizationRepo)
@@ -61,7 +62,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	// สร้าง Handler ที่จะรับ HTTP Request
 	authHandler := auth.NewAuthHandlerWithServices(authService, studentService, organizationService)
 	awardHandler := awardform.NewAwardHandler(awardService, studentService, academicYearService)
-	userHandler := user.NewUserHandler(userService)
+	userHandler := user.NewUserHandlerWithAuth(userService, authService)
 	academicYearHandler := academicyear.NewAcademicYearHandler(academicYearService)
 	facultyHandler := faculty.NewFacultyHandler(facultyService)
 	departmentHandler := department.NewDepartmentHandler(departmentService)
@@ -78,6 +79,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	authGroup.Get("/google/login", authHandler.GoogleLogin)       // Endpoint สำหรับ Redirect ไปหน้า Login ของ Google
 	authGroup.Get("/google/callback", authHandler.GoogleCallback) // Endpoint สำหรับรับ Callback หลังจาก User Login สำเร็จ
 	authGroup.Post("/register", authHandler.Register)
+	authGroup.Post("/create-account", authHandler.CreateAccount)
 	authGroup.Post("/login", authHandler.Login)
 	authGroup.Post("/logout", authHandler.Logout)
 	authGroup.Get("/me", middleware.RequireAuth(userRepo), authHandler.Me)
@@ -116,7 +118,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 
 	// --- Student Routes ---
 	studentGroup := apiGroup.Group("/students")
-	studentGroup.Get("/me", middleware.RequireAuth(userRepo), studentHandler.GetMyStudent)
+	// studentGroup.Get("/me", middleware.RequireAuth(userRepo), studentHandler.GetMyStudent)
 	studentGroup.Get("/:id", studentHandler.GetStudentByID)
 	// studentGroup.Get("/", studentHandler.GetAllStudents)
 	// studentGroup.Post("/user/:userId", studentHandler.CreateStudent) // ?
@@ -131,7 +133,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	awardGroup.Get("/my/submissions/current", awardHandler.GetMyCurrentSemesterSubmissions) // ดูการส่งฟอร์มของตัวเองในภาคเรียนปัจจุบัน (isActive)
 	awardGroup.Get("/types", awardHandler.GetAllAwardTypes)
 	awardGroup.Get("/details/:formId", awardHandler.GetByFormID) // GET ดูรายละเอียดฟอร์ม
-	awardGroup.Get("/approval-logs/me", awardHandler.GetMyApprovalLogs)
+	awardGroup.Get("/my/approval-logs", awardHandler.GetMyApprovalLogs)
 
 	awardGroup.Put("/form-status/change/:formId", awardHandler.UpdateFormStatus) //PUT อัพเดท formStatus
 
@@ -139,7 +141,8 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 
 	userGroup := apiGroup.Group("/users", middleware.RequireAuth(userRepo))
 	userGroup.Get("/", userHandler.GetAllUsersByCampus)      // GET /users (ดึง user ตามวิทยาเขตของคนที่ login)
-	userGroup.Get("/:id", userHandler.GetUserByID)           // GET /users/:id
+	userGroup.Get("/info/:id", userHandler.GetUserByID)           // GET /users/:id
+	userGroup.Put("/promote-chairman/:id", userHandler.ChangeCommitteeRole)
 	userGroup.Put("/update/:id", userHandler.UpdateUserByID) // PUT /users/:id
 
 	// --- Campus Routes ---

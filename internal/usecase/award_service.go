@@ -91,7 +91,7 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 		form.OrgLocation = ""
 		form.OrgPhoneNumber = ""
 
-		// ===== ROLE: ORGANIZATION (RoleID = 9) =====
+		// ===== ROLE: ORGANIZATION (RoleID = 8) =====
 	} else if orgErr == nil && org != nil {
 		// ดึงจาก Organization Service:
 		form.OrgName = org.OrganizationName
@@ -299,8 +299,6 @@ func requiredFormStatusByRole(roleID int) (int, bool) {
 	case 6:
 		return 8, true
 	case 7:
-		return 10, true
-	case 8:
 		return 12, true
 	default:
 		return 0, false

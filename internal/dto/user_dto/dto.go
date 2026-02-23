@@ -15,6 +15,10 @@ type EditUserRequest struct {
     IsFirstLogin *bool   `json:"is_first_login,omitempty"`
 }
 
+type ChangeCommitteeRoleRequest struct {
+    IsChairman bool `json:"is_chairman"`
+}
+
 // UserResponse ส่วนข้อมูล user ที่ปลอดภัยในการส่งออก
 type UserResponse struct {
     UserID       uint      `json:"user_id"`

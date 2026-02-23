@@ -3,11 +3,17 @@ package repository
 import (
 	"backend/internal/models"
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	// "golang.org/x/crypto/bcrypt"
 	// "time"
 	// "fmt"
+)
+
+const (
+	committeeRoleID = 6
 )
 
 type UserRepository interface {
@@ -17,6 +23,7 @@ type UserRepository interface {
 	GetUserByEmail(email string) (*models.User, error)
 	UpdateUserFields(ctx context.Context, userID uint, updates map[string]interface{}) (*models.User, error)
 	GetUserListByCampus(ctx context.Context, campusID int) ([]models.User, error)
+	SetCommitteeChairman(ctx context.Context, targetUserID uint, isChairman bool) error
 }
 
 type userRepository struct {
@@ -82,6 +89,45 @@ func (r *userRepository) GetUserListByCampus(ctx context.Context, campusID int) 
 		return nil, err
 	}
 	return users, nil
+}
+
+func (r *userRepository) ensureCommitteeProfile(tx *gorm.DB, userID uint) error {
+	return tx.Where("user_id = ?", userID).FirstOrCreate(&models.Committee{UserID: userID}).Error
+}
+
+func (r *userRepository) SetCommitteeChairman(ctx context.Context, targetUserID uint, isChairman bool) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var target models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ?", targetUserID).
+			First(&target).Error; err != nil {
+			return err
+		}
+
+		if target.RoleID != committeeRoleID {
+			return errors.New("role change allowed only for committee role")
+		}
+
+		if err := r.ensureCommitteeProfile(tx, targetUserID); err != nil {
+			return err
+		}
+
+		if !isChairman {
+			return tx.Model(&models.Committee{}).
+				Where("user_id = ?", targetUserID).
+				Update("is_chairman", false).Error
+		}
+
+		if err := tx.Model(&models.Committee{}).
+			Where("is_chairman = ? AND user_id <> ?", true, targetUserID).
+			Update("is_chairman", false).Error; err != nil {
+			return err
+		}
+
+		return tx.Model(&models.Committee{}).
+			Where("user_id = ?", targetUserID).
+			Update("is_chairman", true).Error
+	})
 }
 
 // func (r *userRepository) GetUserListSortedByCampus() ([]models.User, error) {

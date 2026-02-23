@@ -52,3 +52,28 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		"provider":       createdUser.Provider,
 	})
 }
+
+func (h *AuthHandler) CreateAccount(c *fiber.Ctx) error {
+	var req authDto.CreateAccountRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid payload",
+		})
+	}
+
+	createdUser, err := h.AuthService.CreateAccount(c.Context(), &req)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"user_id":        createdUser.UserID,
+		"email":          createdUser.Email,
+		"role_id":        createdUser.RoleID,
+		"campus_id":      createdUser.CampusID,
+		"is_first_login": createdUser.IsFirstLogin,
+		"provider":       createdUser.Provider,
+	})
+}

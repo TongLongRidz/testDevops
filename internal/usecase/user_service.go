@@ -13,6 +13,7 @@ import (
 type UserService interface {
 	GetUserByID(ctx context.Context, userID uint) (*models.User, error)
 	UpdateUserByID(ctx context.Context, userID uint, req *userdto.EditUserRequest) (*models.User, error)
+	ChangeCommitteeRoleByID(ctx context.Context, userID uint, isChairman bool) (*models.User, error)
 	GetAllUsersByCampus(ctx context.Context, campusID int) ([]models.User, error)
 }
 
@@ -80,6 +81,13 @@ func (s *userService) UpdateUserByID(ctx context.Context, userID uint, req *user
 		return nil, err
 	}
 	return updated, nil
+}
+
+func (s *userService) ChangeCommitteeRoleByID(ctx context.Context, userID uint, isChairman bool) (*models.User, error) {
+	if err := s.repo.SetCommitteeChairman(ctx, userID, isChairman); err != nil {
+		return nil, err
+	}
+	return s.repo.GetUserByID(userID)
 }
 
 // GetAllUsersByCampus ดึงข้อมูล user ทั้งหมดตามวิทยาเขต

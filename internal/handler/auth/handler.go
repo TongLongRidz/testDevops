@@ -111,10 +111,8 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	case 6:
 		roleName = "committee"
 	case 7:
-		roleName = "committee_chairman"
-	case 8:
 		roleName = "chancellor"
-	case 9:
+	case 8:
 		roleName = "organization"
 	default:
 		roleName = "student"

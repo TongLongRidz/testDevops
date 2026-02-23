@@ -19,7 +19,7 @@ type SubmitAwardRequest struct {
 	StudentDateOfBirth time.Time `json:"student_date_of_birth"`
 	FormDetail         string    `json:"form_detail"`
 
-	// === Role: ORGANIZATION (RoleID = 9) ===
+	// === Role: ORGANIZATION (RoleID = 8) ===
 	// System Auto-Fill จาก Token: UserID, CampusID
 	// System Auto-Fill จาก Organization & Academic Year Service: OrgName, OrgType, OrgLocation, OrgPhoneNumber, AcademicYear, Semester
 	// Organization กรอก:
