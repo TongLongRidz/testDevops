@@ -140,8 +140,8 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 		}
 		req.FormDetail = formDetail
 
-		// ===== ROLE: ORGANIZATION (RoleID = 8) =====
-		case 8:
+	// ===== ROLE: ORGANIZATION (RoleID = 8) =====
+	case 8:
 		fmt.Println("🏢 Processing ORGANIZATION submission...")
 
 		// Organization กรอก:
@@ -284,6 +284,11 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 			"message": "Only Student (RoleID=1) and Organization (RoleID=8) can submit awards",
 		})
 	}
+
+	// Auto-fill ชื่อ-นามสกุล และอีเมลจาก token
+	req.StudentFirstname = user.Firstname
+	req.StudentLastname = user.Lastname
+	req.StudentEmail = user.Email
 
 	// จัดการกับไฟล์แนบ (ถ้ามี)
 	var awardFiles []models.AwardFileDirectory
