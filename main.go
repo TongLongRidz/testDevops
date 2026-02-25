@@ -36,6 +36,7 @@ func main() {
 		&models.StudentDevelopment{},
 		&models.AwardForm{},
 		&models.AwardApprovalLog{},
+		&models.CommitteeVoteLog{},
 		&models.AwardSignedLog{},
 		&models.AwardTypeLog{},
 		&models.AwardFileDirectory{},

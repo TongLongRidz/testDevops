@@ -60,6 +60,11 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 	case 1:
 		fmt.Println("🎓 Processing STUDENT submission...")
 
+		// Auto-fill จาก token สำหรับ student
+		req.StudentFirstname = user.Firstname
+		req.StudentLastname = user.Lastname
+		req.StudentEmail = user.Email
+
 		// Student กรอก:
 		awardType := c.FormValue("award_type")
 		if awardType == "" {
@@ -284,11 +289,6 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 			"message": "Only Student (RoleID=1) and Organization (RoleID=8) can submit awards",
 		})
 	}
-
-	// Auto-fill ชื่อ-นามสกุล และอีเมลจาก token
-	req.StudentFirstname = user.Firstname
-	req.StudentLastname = user.Lastname
-	req.StudentEmail = user.Email
 
 	// จัดการกับไฟล์แนบ (ถ้ามี)
 	var awardFiles []models.AwardFileDirectory
@@ -707,6 +707,13 @@ func (h *AwardHandler) UpdateFormStatus(c *fiber.Ctx) error {
 		})
 	}
 
+	if user.RoleID == 6 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Committee must use vote endpoint",
+		})
+	}
+
 	// Role 5 (Student Development) ใช้ UpdateFormStatusWithLog
 	if user.RoleID == 5 {
 		if err := h.useCase.UpdateFormStatusWithLog(c.UserContext(), uint(formID), req.FormStatusID, req.RejectReason, user.UserID); err != nil {
@@ -728,6 +735,66 @@ func (h *AwardHandler) UpdateFormStatus(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status":  "success",
 		"message": "form_status updated",
+	})
+}
+
+func (h *AwardHandler) CommitteeVote(c *fiber.Ctx) error {
+	currentUser := c.Locals("current_user")
+	if currentUser == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Unauthorized: User not found",
+		})
+	}
+
+	user, ok := currentUser.(*models.User)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid user data",
+		})
+	}
+
+	if user.RoleID != 6 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Only committee role can vote",
+		})
+	}
+
+	formID, err := strconv.Atoi(c.Params("formId"))
+	if err != nil || formID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid formId",
+		})
+	}
+
+	var req awardformdto.CommitteeVoteRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid request body",
+		})
+	}
+
+	voteResult, err := h.useCase.CommitteeVote(c.UserContext(), uint(formID), req.Operation, user.UserID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": err.Error(),
+		})
+	}
+
+	message := "vote saved"
+	if voteResult.HasMajority {
+		message = "vote saved and form status updated to 10"
+	}
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": message,
+		"data":    voteResult,
 	})
 }
 

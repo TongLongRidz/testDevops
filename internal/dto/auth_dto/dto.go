@@ -75,14 +75,14 @@ type MeResponse struct {
 	CreatedAt    time.Time `json:"created_at"`
 	LatestUpdate time.Time `json:"latest_update"`
 
-	StudentData      *StudentMeData      `json:"student_data,omitempty"`
-	OrganizationData *OrganizationMeData `json:"organization_data,omitempty"`
-	HeadOfDepartmentData  *HeadOfDepartmentMeData  `json:"head_of_department_data,omitempty"`
-	AssociateDeanData     *AssociateDeanMeData     `json:"associate_dean_data,omitempty"`
-	DeanData              *DeanMeData              `json:"dean_data,omitempty"`
+	StudentData            *StudentMeData            `json:"student_data,omitempty"`
+	OrganizationData       *OrganizationMeData       `json:"organization_data,omitempty"`
+	HeadOfDepartmentData   *HeadOfDepartmentMeData   `json:"head_of_department_data,omitempty"`
+	AssociateDeanData      *AssociateDeanMeData      `json:"associate_dean_data,omitempty"`
+	DeanData               *DeanMeData               `json:"dean_data,omitempty"`
 	StudentDevelopmentData *StudentDevelopmentMeData `json:"student_development_data,omitempty"`
-	CommitteeData         *CommitteeMeData         `json:"committee_data,omitempty"`
-	ChancellorData        *ChancellorMeData        `json:"chancellor_data,omitempty"`
+	CommitteeData          *CommitteeMeData          `json:"committee_data,omitempty"`
+	ChancellorData         *ChancellorMeData         `json:"chancellor_data,omitempty"`
 }
 
 type StudentMeData struct {

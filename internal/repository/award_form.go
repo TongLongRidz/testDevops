@@ -20,6 +20,7 @@ type AwardSearchFilter struct {
 	Date         string
 	StudentYear  int
 	AwardType    string
+	ExcludeVotedByUserID *uint
 	FacultyID    *int
 	DepartmentID *int
 	FormStatusID *int
@@ -123,6 +124,18 @@ func (r *AwardRepository) GetByKeyword(ctx context.Context, filter AwardSearchFi
 
 	if filter.FormStatusID != nil {
 		query = query.Where("form_status_id = ?", *filter.FormStatusID)
+	}
+
+	if filter.ExcludeVotedByUserID != nil {
+		query = query.Where(
+			`NOT EXISTS (
+				SELECT 1
+				FROM "Committee_Vote_Log" cvl
+				WHERE cvl.form_id = "Award_Form".form_id
+				  AND cvl.user_id = ?
+			)`,
+			*filter.ExcludeVotedByUserID,
+		)
 	}
 
 	// นับจำนวนทั้งหมด
@@ -435,6 +448,71 @@ func (r *AwardRepository) CreateAwardSignedLog(ctx context.Context, log *models.
 
 func (r *AwardRepository) SaveAwardTypeLog(ctx context.Context, log *models.AwardTypeLog) error {
 	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *AwardRepository) IsCommitteeNonChairman(ctx context.Context, userID uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Table("\"Committee\" c").
+		Joins("JOIN \"User\" u ON u.user_id = c.user_id").
+		Where("c.user_id = ?", userID).
+		Where("u.role_id = ?", 6).
+		Where("c.is_chairman = ?", false).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (r *AwardRepository) UpsertCommitteeVoteLog(ctx context.Context, formID uint, userID uint, operation string) error {
+	var existing models.CommitteeVoteLog
+	err := r.db.WithContext(ctx).
+		Where("form_id = ? AND user_id = ?", formID, userID).
+		First(&existing).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			log := &models.CommitteeVoteLog{
+				FormID:    formID,
+				UserID:    userID,
+				Operation: operation,
+				VotedAt:   time.Now(),
+			}
+			return r.db.WithContext(ctx).Create(log).Error
+		}
+		return err
+	}
+
+	existing.Operation = operation
+	existing.VotedAt = time.Now()
+	return r.db.WithContext(ctx).Save(&existing).Error
+}
+
+func (r *AwardRepository) CountNonChairmanCommittees(ctx context.Context) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).
+		Table("\"Committee\" c").
+		Joins("JOIN \"User\" u ON u.user_id = c.user_id").
+		Where("u.role_id = ?", 6).
+		Where("c.is_chairman = ?", false).
+		Count(&total).Error
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *AwardRepository) CountCommitteeVotesByOperation(ctx context.Context, formID uint, operation string) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).
+		Model(&models.CommitteeVoteLog{}).
+		Where("form_id = ? AND operation = ?", formID, operation).
+		Count(&total).Error
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (r *AwardRepository) GetApprovalLogsByUserID(ctx context.Context, userID uint) ([]models.AwardApprovalLog, error) {

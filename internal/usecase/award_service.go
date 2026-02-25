@@ -25,6 +25,7 @@ type AwardUseCase interface {
 	UpdateAwardType(ctx context.Context, formID uint, awardType string, changedBy uint) error
 	UpdateFormStatus(ctx context.Context, formID uint, formStatus int, rejectReason string, changedBy uint) error
 	UpdateFormStatusWithLog(ctx context.Context, formID uint, formStatus int, rejectReason string, changedBy uint) error
+	CommitteeVote(ctx context.Context, formID uint, operation string, votedBy uint) (*awardformdto.CommitteeVoteResult, error)
 	GetApprovalLogsByUserID(ctx context.Context, userID uint) ([]models.AwardApprovalLog, error)
 	GetApprovalHistory(ctx context.Context, userID uint, campusID int, keyword string, date string, awardType string, operation string, sortBy string, sortOrder string, page int, limit int) (*awardformdto.PaginatedApprovalLogResponse, error)
 	GetAllAwardTypes(ctx context.Context) ([]string, error)
@@ -78,10 +79,10 @@ func (u *awardUseCase) SubmitAward(ctx context.Context, userID uint, input award
 
 	// ===== ROLE: STUDENT (RoleID = 1) =====
 	if studentErr == nil && student != nil {
-		// ดึงจาก Student Service:
-		form.StudentFirstname = student.User.Firstname
-		form.StudentLastname = student.User.Lastname
-		form.StudentEmail = student.User.Email
+		// ใช้ค่าที่ auto-fill จาก token ใน handler
+		form.StudentFirstname = input.StudentFirstname
+		form.StudentLastname = input.StudentLastname
+		form.StudentEmail = input.StudentEmail
 		form.StudentNumber = student.StudentNumber
 		form.FacultyID = int(student.FacultyID)
 		form.DepartmentID = int(student.DepartmentID)
@@ -194,6 +195,10 @@ func (u *awardUseCase) GetByKeyword(ctx context.Context, userID uint, roleID int
 		filter.FormStatusID = &formStatusID
 	}
 
+	if roleID == 6 {
+		filter.ExcludeVotedByUserID = &userID
+	}
+
 	if needsDepartmentScopeByRole(roleID) {
 		facultyID, departmentID, err := u.repo.GetHeadOfDepartmentScopeByUserID(ctx, userID)
 		if err != nil {
@@ -277,11 +282,9 @@ func normalizeOperation(operation string) string {
 	case "", "ทั้งหมด":
 		return ""
 	case "อนุมัติ", "approve", "approved":
-		return "อนุมัติ"
-	case "ไม่อนุมัติ", "ปฏิเสธ", "reject", "rejected":
-		return "ปฏิเสธ"
-	case "ตีกลับ", "return", "returned":
-		return "ตีกลับ"
+		return "approve"
+	case "ไม่อนุมัติ", "ปฏิเสธ", "reject", "rejected", "ตีกลับ", "return", "returned":
+		return "reject"
 	default:
 		return strings.TrimSpace(operation)
 	}
@@ -521,11 +524,11 @@ func (u *awardUseCase) UpdateFormStatusWithLog(ctx context.Context, formID uint,
 
 	// 2. Map formStatus เป็น status string
 	statusMap := map[int]string{
-		2: "approved",
-		3: "rejected",
+		2: "approve",
+		3: "reject",
 	}
 
-newStatus := statusMap[formStatus]
+	newStatus := statusMap[formStatus]
 
 	// 3. กำหนด logType
 	logType := "approval"
@@ -566,14 +569,95 @@ newStatus := statusMap[formStatus]
 	return nil
 }
 
+func (u *awardUseCase) CommitteeVote(ctx context.Context, formID uint, operation string, votedBy uint) (*awardformdto.CommitteeVoteResult, error) {
+	form, err := u.repo.GetByFormID(ctx, int(formID))
+	if err != nil {
+		return nil, err
+	}
+	if form == nil {
+		return nil, errors.New("form not found")
+	}
+
+	isEligible, err := u.repo.IsCommitteeNonChairman(ctx, votedBy)
+	if err != nil {
+		return nil, err
+	}
+	if !isEligible {
+		return nil, errors.New("only committee members with is_chairman=false can vote")
+	}
+
+	normalized := strings.ToLower(strings.TrimSpace(operation))
+	if normalized == "approve" {
+		normalized = "approve"
+	}
+	if normalized == "approved" {
+		normalized = "approve"
+	}
+	if normalized == "rejected" {
+		normalized = "reject"
+	}
+	if normalized != "approve" && normalized != "reject" {
+		return nil, errors.New("operation must be approve or reject")
+	}
+
+	if err := u.repo.UpsertCommitteeVoteLog(ctx, formID, votedBy, normalized); err != nil {
+		return nil, err
+	}
+
+	totalCommittee, err := u.repo.CountNonChairmanCommittees(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if totalCommittee == 0 {
+		return nil, errors.New("no committee members available for voting")
+	}
+
+	approvedCount, err := u.repo.CountCommitteeVotesByOperation(ctx, formID, "approve")
+	if err != nil {
+		return nil, err
+	}
+	rejectCount, err := u.repo.CountCommitteeVotesByOperation(ctx, formID, "reject")
+	if err != nil {
+		return nil, err
+	}
+
+	half := totalCommittee / 2
+	hasApproveMajority := approvedCount > half
+	hasRejectMajority := rejectCount > half
+	hasMajority := hasApproveMajority || hasRejectMajority
+	currentFormStatusID := form.FormStatusID
+	if hasApproveMajority {
+		if err := u.repo.UpdateFormStatus(ctx, formID, 10, ""); err != nil {
+			return nil, err
+		}
+		currentFormStatusID = 10
+	} else if hasRejectMajority {
+		if err := u.repo.UpdateFormStatus(ctx, formID, 11, "คณะกรรมการไม่เห็นชอบ"); err != nil {
+			return nil, err
+		}
+		currentFormStatusID = 11
+	}
+
+	return &awardformdto.CommitteeVoteResult{
+		Operation:      normalized,
+		ApproveCount:   approvedCount,
+		RejectCount:    rejectCount,
+		TotalVoters:    totalCommittee,
+		VotedCount:     approvedCount + rejectCount,
+		HasMajority:    hasMajority,
+		MajorityTarget: (totalCommittee / 2) + 1,
+		FormStatusID:   currentFormStatusID,
+	}, nil
+}
+
 func mapFormStatusToApprovalStatus(formStatus int) (string, bool) {
 	switch formStatus {
 	case 2, 4, 6, 8, 10:
-		return "อนุมัติ", true
+		return "approve", true
 	case 3, 5, 7, 11:
-		return "ปฏิเสธ", true
+		return "reject", true
 	case 9:
-		return "ตีกลับ", true
+		return "reject", true
 	default:
 		return "", false
 	}

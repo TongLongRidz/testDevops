@@ -106,15 +106,30 @@ type UpdateFormStatusRequest struct {
 	RejectReason string `json:"reject_reason"`
 }
 
+type CommitteeVoteRequest struct {
+	Operation string `json:"operation" binding:"required"` // approve | reject
+}
+
+type CommitteeVoteResult struct {
+	Operation      string `json:"operation"`
+	ApproveCount   int64  `json:"approve_count"`
+	RejectCount    int64  `json:"reject_count"`
+	TotalVoters    int64  `json:"total_voters"`
+	VotedCount     int64  `json:"voted_count"`
+	HasMajority    bool   `json:"has_majority"`
+	MajorityTarget int64  `json:"majority_target"`
+	FormStatusID   int    `json:"form_status_id"`
+}
+
 type SearchApprovalLogRequest struct {
-	Keyword    string `query:"keyword"`     // ชื่อ-นามสกุล หรือรหัสนิสิต
-	Date       string `query:"date"`        // วันที่ดำเนินการ (format: YYYY-MM-DD)
-	AwardType  string `query:"award_type"`  // ประเภทรางวัล
-	Operation  string `query:"operation"`   // อนุมัติ, ไม่อนุมัติ/ปฏิเสธ, ตีกลับ
-	SortBy     string `query:"sort_by"`     // name, studentNumber, academicYear, awardType, date (default: date)
-	SortOrder  string `query:"sort_order"`  // asc, des/desc (default: des)
-	Page       int    `query:"page"`        // default: 1
-	Limit      int    `query:"limit"`       // default: 5, max: 5
+	Keyword     string `query:"keyword"`     // ชื่อ-นามสกุล หรือรหัสนิสิต
+	Date        string `query:"date"`        // วันที่ดำเนินการ (format: YYYY-MM-DD)
+	AwardType   string `query:"award_type"`  // ประเภทรางวัล
+	Operation   string `query:"operation"`   // approve, reject
+	SortBy      string `query:"sort_by"`     // name, studentNumber, academicYear, awardType, date (default: date)
+	SortOrder   string `query:"sort_order"`  // asc, des/desc (default: des)
+	Page        int    `query:"page"`        // default: 1
+	Limit       int    `query:"limit"`       // default: 5, max: 5
 	Arrangement string `query:"arrangement"` // backward-compatible: asc หรือ desc
 }
 

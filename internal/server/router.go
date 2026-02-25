@@ -124,6 +124,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	awardGroup.Get("/types", awardHandler.GetAllAwardTypes)
 	awardGroup.Get("/details/:formId", awardHandler.GetByFormID) // GET ดูรายละเอียดฟอร์ม
 	awardGroup.Get("/my/approval-logs", awardHandler.GetMyApprovalLogs)
+	awardGroup.Post("/committee/vote/:formId", awardHandler.CommitteeVote)
 
 	awardGroup.Put("/form-status/change/:formId", awardHandler.UpdateFormStatus) //PUT อัพเดท formStatus
 
