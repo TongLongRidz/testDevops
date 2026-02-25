@@ -7,6 +7,7 @@ type AwardApprovalLog struct {
 	FormID         uint      `gorm:"column:form_id;not null;index" json:"form_id"`
 	UserID         uint      `gorm:"column:user_id;not null;index" json:"user_id"`
 	ApprovalStatus string    `gorm:"column:approval_status;type:varchar(10);not null" json:"approval_status"`
+	RejectReason   string    `gorm:"column:reject_reason;type:text" json:"reject_reason,omitempty"`
 	ApprovedAt     time.Time `gorm:"column:approved_at;not null" json:"approved_at"`
 }
 

@@ -24,6 +24,7 @@ type AwardUseCase interface {
 	IsDuplicate(userID uint, year int, semester int) (bool, error)
 	UpdateAwardType(ctx context.Context, formID uint, awardType string, changedBy uint) error
 	UpdateFormStatus(ctx context.Context, formID uint, formStatus int, rejectReason string, changedBy uint) error
+	UpdateFormStatusWithLog(ctx context.Context, formID uint, formStatus int, rejectReason string, changedBy uint) error
 	GetApprovalLogsByUserID(ctx context.Context, userID uint) ([]models.AwardApprovalLog, error)
 	GetApprovalHistory(ctx context.Context, userID uint, campusID int, keyword string, date string, awardType string, operation string, sortBy string, sortOrder string, page int, limit int) (*awardformdto.PaginatedApprovalLogResponse, error)
 	GetAllAwardTypes(ctx context.Context) ([]string, error)
@@ -478,11 +479,77 @@ func (u *awardUseCase) UpdateFormStatus(ctx context.Context, formID uint, formSt
 			FormID:         formID,
 			UserID:         changedBy,
 			ApprovalStatus: approvalStatus,
+			RejectReason:   trimmedRejectReason,
 			ApprovedAt:     time.Now(),
 		}
 		if err := u.repo.CreateAwardApprovalLog(ctx, log); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// UpdateFormStatusWithLog - สำหรับ role 5 (Student Development) บันทึกประวัติการอนุมัติ/ตีกลับ
+func (u *awardUseCase) UpdateFormStatusWithLog(ctx context.Context, formID uint, formStatus int, rejectReason string, changedBy uint) error {
+	form, err := u.repo.GetByFormID(ctx, int(formID))
+	if err != nil {
+		return err
+	}
+	if form == nil {
+		return errors.New("form not found")
+	}
+	if formStatus == 0 {
+		return errors.New("form_status is required")
+	}
+	if form.FormStatusID == formStatus {
+		return nil
+	}
+
+	trimmedRejectReason := strings.TrimSpace(rejectReason)
+
+	// สำหรับการอนุมัติ (status = 2) ไม่ต้องมี reject_reason
+	// สำหรับการตีกลับ (status = 3) ต้องมี reject_reason
+	if formStatus == 3 && trimmedRejectReason == "" {
+		return errors.New("reject_reason is required for rejection")
+	}
+
+	// 1. อัปเดตสถานะฟอร์ม
+	if err := u.repo.UpdateFormStatus(ctx, formID, formStatus, trimmedRejectReason); err != nil {
+		return err
+	}
+
+	// 2. Map formStatus เป็น status string
+	statusMap := map[int]string{
+		2: "approved",
+		3: "rejected",
+	}
+
+newStatus := statusMap[formStatus]
+
+	// 3. กำหนด logType
+	logType := "approval"
+	if formStatus == 3 {
+		logType = "rejection"
+	}
+
+	// 4. บันทึก award type log
+	typeLog := &models.AwardTypeLog{
+		FormID:    formID,
+		UserID:    changedBy,
+		LogType:   logType,
+		Status:    newStatus,
+		ChangedAt: time.Now(),
+	}
+
+	// สำหรับการตีกลับ บันทึก old value (award type เดิม) และ reason
+	if formStatus == 3 {
+		typeLog.OldValue = form.AwardType
+		typeLog.RejectReason = trimmedRejectReason
+	}
+
+	if err := u.repo.SaveAwardTypeLog(ctx, typeLog); err != nil {
+		return err
 	}
 
 	if shouldLogSigned := shouldCreateSignedLog(formStatus); shouldLogSigned {

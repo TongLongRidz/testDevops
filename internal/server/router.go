@@ -89,23 +89,15 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 
 	// --- Academic Year Routes ---
 	academicYearGroup := apiGroup.Group("/academic-years")
-	academicYearGroup.Post("/create", academicYearHandler.CreateAcademicYear)
-	academicYearGroup.Get("/all", academicYearHandler.GetAllAcademicYears)
-	academicYearGroup.Get("/:id", academicYearHandler.GetAcademicYearByID)
-	academicYearGroup.Get("/current/semester", academicYearHandler.GetCurrentSemester)
-	academicYearGroup.Get("/current/registration", academicYearHandler.GetLatestAbleRegister)
-	academicYearGroup.Put("/edit/:id", academicYearHandler.UpdateAcademicYear)
-	academicYearGroup.Delete("/delete/:id", academicYearHandler.DeleteAcademicYear)
-	academicYearGroup.Put("/toggle-current/:id", academicYearHandler.ToggleCurrent)
-	academicYearGroup.Put("/toggle-registration/:id", academicYearHandler.ToggleOpenRegister)
+	academicYearGroup.Get("/all", academicYearHandler.GetAllAcademicYears) // ส่ง List เฉพาะปี (ไม่ซ้ำ) เอาไป sort
+	academicYearGroup.Post("/create", academicYearHandler.CreateAcademicYear) // สร้างปีการศึกษา ()
+	academicYearGroup.Get("/current", academicYearHandler.GetCurrentSemester)
 
 	// --- Faculty Routes ---
 	facultyGroup := apiGroup.Group("/faculty")
 	facultyGroup.Post("/create", facultyHandler.CreateFaculty)
 	facultyGroup.Get("/", facultyHandler.GetAllFaculties)
 	facultyGroup.Get("/:id", facultyHandler.GetFacultyByID)
-	// facultyGroup.Put("/edit/:id", facultyHandler.UpdateFaculty)
-	// facultyGroup.Delete("/delete/:id", facultyHandler.DeleteFaculty)
 
 	// --- Department Routes ---
 	departmentGroup := apiGroup.Group("/department")
@@ -113,8 +105,6 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	departmentGroup.Get("/", departmentHandler.GetAllDepartments)
 	departmentGroup.Get("/:id", departmentHandler.GetDepartmentByID)
 	departmentGroup.Get("/faculty/:facultyId", departmentHandler.GetDepartmentsByFacultyID)
-	// departmentGroup.Put("/edit/:id", departmentHandler.UpdateDepartment)
-	// departmentGroup.Delete("/delete/:id", departmentHandler.DeleteDepartment)
 
 	// --- Student Routes ---
 	studentGroup := apiGroup.Group("/students")

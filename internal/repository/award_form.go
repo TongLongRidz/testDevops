@@ -433,6 +433,10 @@ func (r *AwardRepository) CreateAwardSignedLog(ctx context.Context, log *models.
 	return r.db.WithContext(ctx).Create(log).Error
 }
 
+func (r *AwardRepository) SaveAwardTypeLog(ctx context.Context, log *models.AwardTypeLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
 func (r *AwardRepository) GetApprovalLogsByUserID(ctx context.Context, userID uint) ([]models.AwardApprovalLog, error) {
 	var logs []models.AwardApprovalLog
 	err := r.db.WithContext(ctx).

@@ -5,7 +5,11 @@ import (
 	"backend/internal/models"
 	"backend/internal/repository"
 	"context"
+	"errors"
 	"fmt"
+	"time"
+
+	"gorm.io/gorm"
 )
 
 type AcademicYearService interface {
@@ -14,8 +18,6 @@ type AcademicYearService interface {
 	GetAllAcademicYears(ctx context.Context) ([]models.AcademicYear, error)
 	UpdateAcademicYear(ctx context.Context, id uint, req *academicYearDTO.UpdateAcademicYear) (*models.AcademicYear, error)
 	DeleteAcademicYear(ctx context.Context, id uint) error
-	ToggleCurrent(ctx context.Context, id uint) (*models.AcademicYear, error)
-	ToggleOpenRegister(ctx context.Context, id uint) (*models.AcademicYear, error)
 	GetCurrentSemester(ctx context.Context) (*models.AcademicYear, error)
 	GetLatestAbleRegister(ctx context.Context) (*models.AcademicYear, error)
 }
@@ -29,13 +31,44 @@ func NewAcademicYearService(repo repository.AcademicYearRepository) AcademicYear
 }
 
 func (s *academicYearService) CreateAcademicYear(ctx context.Context, req *academicYearDTO.CreateAcademicYear) (*models.AcademicYear, error) {
-	if err := s.validateAcademicYearRules(ctx, req.Year, req.Semester, nil); err != nil {
+	if req.StartDate.IsZero() || req.EndDate.IsZero() {
+		return nil, fmt.Errorf("start_date and end_date are required")
+	}
+	if req.EndDate.Before(req.StartDate) {
+		return nil, fmt.Errorf("end_date must be after or equal to start_date")
+	}
+
+	var nextYear int
+	var nextSemester int
+
+	latestAcademicYear, err := s.repo.GetCurrentSemester(ctx)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			nextYear = time.Now().Year()
+			nextSemester = 1
+		} else {
+			return nil, err
+		}
+	} else {
+		nextYear = latestAcademicYear.Year
+		switch latestAcademicYear.Semester {
+		case 1:
+			nextSemester = 2
+		case 2:
+			nextYear = latestAcademicYear.Year + 1
+			nextSemester = 1
+		default:
+			return nil, fmt.Errorf("invalid latest semester value: %d", latestAcademicYear.Semester)
+		}
+	}
+
+	if err := s.validateAcademicYearRules(ctx, nextYear, nextSemester, nil); err != nil {
 		return nil, err
 	}
 
 	academicYear := &models.AcademicYear{
-		Year:      req.Year,
-		Semester:  req.Semester,
+		Year:      nextYear,
+		Semester:  nextSemester,
 		StartDate: req.StartDate,
 		EndDate:   req.EndDate,
 	}
@@ -79,22 +112,6 @@ func (s *academicYearService) UpdateAcademicYear(ctx context.Context, id uint, r
 
 func (s *academicYearService) DeleteAcademicYear(ctx context.Context, id uint) error {
 	return s.repo.Delete(ctx, id)
-}
-
-func (s *academicYearService) ToggleCurrent(ctx context.Context, id uint) (*models.AcademicYear, error) {
-	if err := s.repo.ToggleCurrent(ctx, id); err != nil {
-		return nil, err
-	}
-
-	return s.repo.GetByID(ctx, id)
-}
-
-func (s *academicYearService) ToggleOpenRegister(ctx context.Context, id uint) (*models.AcademicYear, error) {
-	if err := s.repo.ToggleOpenRegister(ctx, id); err != nil {
-		return nil, err
-	}
-
-	return s.repo.GetByID(ctx, id)
 }
 
 func (s *academicYearService) GetCurrentSemester(ctx context.Context) (*models.AcademicYear, error) {

@@ -281,7 +281,7 @@ func (h *AwardHandler) Submit(c *fiber.Ctx) error {
 	default:
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"status":  "error",
-			"message": "Only Student (RoleID=1) and Organization (RoleID=9) can submit awards",
+			"message": "Only Student (RoleID=1) and Organization (RoleID=8) can submit awards",
 		})
 	}
 
@@ -463,7 +463,7 @@ func (h *AwardHandler) GetMySubmissions(c *fiber.Ctx) error {
 	}
 
 	// เช็ค Role
-	if user.RoleID != 1 && user.RoleID != 9 {
+	if user.RoleID != 1 && user.RoleID != 8 {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Only Student and Organization can view submissions",
@@ -540,7 +540,7 @@ func (h *AwardHandler) GetMyCurrentSemesterSubmissions(c *fiber.Ctx) error {
 	}
 
 	// เช็ค Role
-	if user.RoleID != 1 && user.RoleID != 9 {
+	if user.RoleID != 1 && user.RoleID != 8 {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Only Student and Organization can view submissions",
@@ -702,11 +702,22 @@ func (h *AwardHandler) UpdateFormStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := h.useCase.UpdateFormStatus(c.UserContext(), uint(formID), req.FormStatusID, req.RejectReason, user.UserID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"status":  "error",
-			"message": err.Error(),
-		})
+	// Role 5 (Student Development) ใช้ UpdateFormStatusWithLog
+	if user.RoleID == 5 {
+		if err := h.useCase.UpdateFormStatusWithLog(c.UserContext(), uint(formID), req.FormStatusID, req.RejectReason, user.UserID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"status":  "error",
+				"message": err.Error(),
+			})
+		}
+	} else {
+		// Role อื่น ๆ ใช้ UpdateFormStatus ตามเดิม
+		if err := h.useCase.UpdateFormStatus(c.UserContext(), uint(formID), req.FormStatusID, req.RejectReason, user.UserID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"status":  "error",
+				"message": err.Error(),
+			})
+		}
 	}
 
 	return c.JSON(fiber.Map{
