@@ -3,6 +3,7 @@ package user
 import (
 	authDto "backend/internal/dto/auth_dto"
 	userdto "backend/internal/dto/user_dto"
+	"backend/internal/models"
 	"backend/internal/usecase"
 	"strconv"
 
@@ -118,13 +119,19 @@ func (h *UserHandler) GetUserByID(c *fiber.Ctx) error {
 
 // GET /users (ดึง user ตามวิทยาเขตของคนที่ login อยู่)
 func (h *UserHandler) GetAllUsersByCampus(c *fiber.Ctx) error {
-	// ดึง user ข้อมูลจาก context (จาก middleware)
-	currentUser, ok := c.Locals("user").(*userdto.UserResponse)
+	currentUser, ok := c.Locals("current_user").(*models.User)
+
 	if !ok || currentUser == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 	}
 
-	users, err := h.UserService.GetAllUsersByCampus(c.Context(), currentUser.CampusID)
+	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
+	const limit = 6
+
+	users, err := h.UserService.GetAllUsersByCampus(c.Context(), currentUser.CampusID, page, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -147,7 +154,12 @@ func (h *UserHandler) GetAllUsersByCampus(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(responses)
+	return c.JSON(fiber.Map{
+		"page":  page,
+		"limit": limit,
+		"size":  len(responses),
+		"data":  responses,
+	})
 }
 
 // PUT /users/:id

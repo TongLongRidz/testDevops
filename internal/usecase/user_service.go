@@ -14,7 +14,7 @@ type UserService interface {
 	GetUserByID(ctx context.Context, userID uint) (*models.User, error)
 	UpdateUserByID(ctx context.Context, userID uint, req *userdto.EditUserRequest) (*models.User, error)
 	ChangeCommitteeRoleByID(ctx context.Context, userID uint, isChairman bool) (*models.User, error)
-	GetAllUsersByCampus(ctx context.Context, campusID int) ([]models.User, error)
+	GetAllUsersByCampus(ctx context.Context, campusID int, page int, limit int) ([]models.User, error)
 }
 
 type userService struct {
@@ -90,12 +90,22 @@ func (s *userService) ChangeCommitteeRoleByID(ctx context.Context, userID uint, 
 	return s.repo.GetUserByID(userID)
 }
 
-// GetAllUsersByCampus ดึงข้อมูล user ทั้งหมดตามวิทยาเขต
-func (s *userService) GetAllUsersByCampus(ctx context.Context, campusID int) ([]models.User, error) {
+// GetAllUsersByCampus ดึงข้อมูล user ตามวิทยาเขตแบบแบ่งหน้า
+func (s *userService) GetAllUsersByCampus(ctx context.Context, campusID int, page int, limit int) ([]models.User, error) {
 	if campusID <= 0 {
 		return nil, errors.New("invalid campus id")
 	}
-	users, err := s.repo.GetUserListByCampus(ctx, campusID)
+	if page < 1 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 6
+	}
+	if limit > 6 {
+		limit = 6
+	}
+
+	users, err := s.repo.GetUserListByCampus(ctx, campusID, page, limit)
 	if err != nil {
 		return nil, err
 	}

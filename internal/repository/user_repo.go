@@ -22,7 +22,7 @@ type UserRepository interface {
 	GetUserList() ([]models.User, error)
 	GetUserByEmail(email string) (*models.User, error)
 	UpdateUserFields(ctx context.Context, userID uint, updates map[string]interface{}) (*models.User, error)
-	GetUserListByCampus(ctx context.Context, campusID int) ([]models.User, error)
+	GetUserListByCampus(ctx context.Context, campusID int, page int, limit int) ([]models.User, error)
 	SetCommitteeChairman(ctx context.Context, targetUserID uint, isChairman bool) error
 }
 
@@ -79,11 +79,14 @@ func (r *userRepository) UpdateUserFields(ctx context.Context, userID uint, upda
 	return r.GetUserByID(userID)
 }
 
-func (r *userRepository) GetUserListByCampus(ctx context.Context, campusID int) ([]models.User, error) {
+func (r *userRepository) GetUserListByCampus(ctx context.Context, campusID int, page int, limit int) ([]models.User, error) {
 	var users []models.User
+	offset := (page - 1) * limit
 	err := r.db.WithContext(ctx).
 		Where("campus_id = ?", campusID).
 		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
 		Find(&users).Error
 	if err != nil {
 		return nil, err
