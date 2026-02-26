@@ -823,23 +823,54 @@ func (h *AwardHandler) GetMyApprovalLogs(c *fiber.Ctx) error {
 		})
 	}
 
+	keyword := strings.TrimSpace(req.Keyword)
+	if keyword == "" {
+		keyword = strings.TrimSpace(c.Query("q"))
+	}
+
+	date := strings.TrimSpace(req.Date)
+	awardType := strings.TrimSpace(req.AwardType)
+	if awardType == "" {
+		awardType = strings.TrimSpace(c.Query("awardType"))
+	}
+
+	operation := strings.TrimSpace(req.Operation)
+
+	sortBy := strings.TrimSpace(req.SortBy)
+	if sortBy == "" {
+		sortBy = strings.TrimSpace(c.Query("sortBy"))
+	}
+
 	sortOrder := req.SortOrder
 	if strings.TrimSpace(sortOrder) == "" {
 		sortOrder = req.Arrangement
 	}
+	if strings.TrimSpace(sortOrder) == "" {
+		sortOrder = c.Query("sortOrder")
+	}
+
+	page := req.Page
+	if page == 0 {
+		page = c.QueryInt("pageNumber", 1)
+	}
+	if page < 1 {
+		page = 1
+	}
+
+	const limit = 5
 
 	logs, err := h.useCase.GetApprovalHistory(
 		c.UserContext(),
 		user.UserID,
 		user.CampusID,
-		req.Keyword,
-		req.Date,
-		req.AwardType,
-		req.Operation,
-		req.SortBy,
+		keyword,
+		date,
+		awardType,
+		operation,
+		sortBy,
 		sortOrder,
-		req.Page,
-		req.Limit,
+		page,
+		limit,
 	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -868,5 +899,36 @@ func (h *AwardHandler) GetAllAwardTypes(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status": "success",
 		"data":   awardTypes,
+	})
+}
+
+// GetApprovalLogDetail handles GET /api/awards/approval-logs/:id
+func (h *AwardHandler) GetApprovalLogDetail(c *fiber.Ctx) error {
+	idParam := c.Params("id")
+	if idParam == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Missing approval log ID",
+		})
+	}
+	approvalLogID, err := strconv.Atoi(idParam)
+	if err != nil || approvalLogID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid approval log ID",
+		})
+	}
+
+	detail, err := h.useCase.GetApprovalLogDetail(c.UserContext(), uint(approvalLogID))
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Approval log not found",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status": "success",
+		"data":   detail,
 	})
 }

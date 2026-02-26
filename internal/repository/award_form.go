@@ -15,19 +15,19 @@ type AwardRepository struct {
 }
 
 type AwardSearchFilter struct {
-	CampusID     int
-	Keyword      string
-	Date         string
-	StudentYear  int
-	AwardType    string
+	CampusID             int
+	Keyword              string
+	Date                 string
+	StudentYear          int
+	AwardType            string
 	ExcludeVotedByUserID *uint
-	FacultyID    *int
-	DepartmentID *int
-	FormStatusID *int
-	SortBy       string
-	SortOrder    string
-	Page         int
-	Limit        int
+	FacultyID            *int
+	DepartmentID         *int
+	FormStatusID         *int
+	SortBy               string
+	SortOrder            string
+	Page                 int
+	Limit                int
 }
 
 type ApprovalLogSearchFilter struct {
@@ -186,11 +186,11 @@ func (r *AwardRepository) GetApprovalHistoryByUserAndCampus(ctx context.Context,
 	var total int64
 
 	query := r.db.WithContext(ctx).
-		Table("Award_Approval_Log AS aal").
-		Joins("JOIN Award_Form af ON af.form_id = aal.form_id").
+		Table(`"Award_Approval_Log" AS aal`).
+		Joins(`JOIN "Award_Form" af ON af.form_id = aal.form_id`).
 		Where("aal.user_id = ?", filter.UserID).
 		Where("af.campus_id = ?", filter.CampusID)
-
+		
 	if filter.Keyword != "" {
 		query = query.Where(
 			"af.student_firstname LIKE ? OR af.student_lastname LIKE ? OR af.student_number LIKE ? OR CONCAT(af.student_firstname, ' ', af.student_lastname) LIKE ?",
@@ -522,6 +522,18 @@ func (r *AwardRepository) GetApprovalLogsByUserID(ctx context.Context, userID ui
 		Order("approved_at desc").
 		Find(&logs).Error
 	return logs, err
+}
+
+// GetApprovalLogByID fetches a single approval log by its ID
+func (r *AwardRepository) GetApprovalLogByID(ctx context.Context, approvalLogID uint) (*models.AwardApprovalLog, error) {
+	var log models.AwardApprovalLog
+	err := r.db.WithContext(ctx).
+		Where("approval_log_id = ?", approvalLogID).
+		First(&log).Error
+	if err != nil {
+		return nil, err
+	}
+	return &log, nil
 }
 
 // GetAllAwardTypes ดึง award_type ทั้งหมดที่มีในตาราง (ไม่ซ้ำกัน)

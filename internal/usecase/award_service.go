@@ -29,6 +29,7 @@ type AwardUseCase interface {
 	GetApprovalLogsByUserID(ctx context.Context, userID uint) ([]models.AwardApprovalLog, error)
 	GetApprovalHistory(ctx context.Context, userID uint, campusID int, keyword string, date string, awardType string, operation string, sortBy string, sortOrder string, page int, limit int) (*awardformdto.PaginatedApprovalLogResponse, error)
 	GetAllAwardTypes(ctx context.Context) ([]string, error)
+	GetApprovalLogDetail(ctx context.Context, approvalLogID uint) (*models.AwardApprovalLog, error)
 }
 
 type awardUseCase struct {
@@ -758,4 +759,12 @@ func (u *awardUseCase) GetApprovalLogsByUserID(ctx context.Context, userID uint)
 		return nil, errors.New("invalid user id")
 	}
 	return u.repo.GetApprovalLogsByUserID(ctx, userID)
+}
+
+// GetApprovalLogDetail implements AwardUseCase for fetching approval log detail by ID
+func (u *awardUseCase) GetApprovalLogDetail(ctx context.Context, approvalLogID uint) (*models.AwardApprovalLog, error) {
+	if approvalLogID == 0 {
+		return nil, errors.New("invalid approval log id")
+	}
+	return u.repo.GetApprovalLogByID(ctx, approvalLogID)
 }
