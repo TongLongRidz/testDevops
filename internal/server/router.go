@@ -89,7 +89,7 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 
 	// --- Academic Year Routes ---
 	academicYearGroup := apiGroup.Group("/academic-years")
-	academicYearGroup.Get("/all", academicYearHandler.GetAllAcademicYears) // ส่ง List เฉพาะปี (ไม่ซ้ำ) เอาไป sort
+	academicYearGroup.Get("/all", academicYearHandler.GetAllAcademicYears)    // ส่ง List เฉพาะปี (ไม่ซ้ำ) เอาไป sort
 	academicYearGroup.Post("/create", academicYearHandler.CreateAcademicYear) // สร้างปีการศึกษา ()
 	academicYearGroup.Get("/current", academicYearHandler.GetCurrentSemester)
 
@@ -124,8 +124,8 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	awardGroup.Get("/types", awardHandler.GetAllAwardTypes)
 	awardGroup.Get("/details/:formId", awardHandler.GetByFormID) // GET ดูรายละเอียดฟอร์ม
 	awardGroup.Get("/my/approval-logs", awardHandler.GetMyApprovalLogs)
-	awardGroup.Get("/approval-logs/:id", awardHandler.GetApprovalLogDetail) // GET /awards/approval-logs/:id
-	
+	awardGroup.Get("/approval-logs/:formId", awardHandler.GetApprovalLogDetail) // GET /awards/approval-logs/:id
+
 	awardGroup.Post("/committee/vote/:formId", awardHandler.CommitteeVote)
 
 	awardGroup.Put("/form-status/change/:formId", awardHandler.UpdateFormStatus) //PUT อัพเดท formStatus
@@ -133,8 +133,8 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	awardGroup.Put("/award-type/change/:formId", awardHandler.UpdateAwardType)
 
 	userGroup := apiGroup.Group("/users", middleware.RequireAuth(userRepo))
-	userGroup.Get("/", userHandler.GetAllUsersByCampus)      // GET /users (ดึง user ตามวิทยาเขตของคนที่ login)
-	userGroup.Get("/info/:id", userHandler.GetUserByID)           // GET /users/:id
+	userGroup.Get("/", userHandler.GetAllUsersByCampus) // GET /users (ดึง user ตามวิทยาเขตของคนที่ login)
+	userGroup.Get("/info/:id", userHandler.GetUserByID) // GET /users/:id
 	userGroup.Put("/promote-chairman/:id", userHandler.ChangeCommitteeRole)
 	userGroup.Put("/update/:id", userHandler.UpdateUserByID) // PUT /users/:id
 
